@@ -3,5 +3,22 @@
 version = 3
 
 [[package]]
-name = "trinity-rs"
+name = "neoc"
+version = "0.1.0"
+
+[[package]]
+name = "neol"
+version = "0.1.0"
+
+[[package]]
+name = "trinity"
+version = "0.1.0"
+dependencies = [
+ "neoc",
+ "neol",
+ "trivm",
+]
+
+[[package]]
+name = "trivm"
 version = "0.1.0"

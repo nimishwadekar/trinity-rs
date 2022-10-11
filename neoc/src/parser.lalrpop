@@ -1,0 +1,53 @@
+use std::str::FromStr;
+use crate::ast::{Expr, BinaryOpType};
+use lalrpop_util::ErrorRecovery;
+
+grammar<'err>(errors: &'err mut Vec<ErrorRecovery<usize, Token<'input>, &'static str>>);
+
+//=========================================
+// MACROS
+//=========================================
+
+Comma<T>: Vec<T> = {
+    <v:(<T> ",")*> <e:T?> => match e {
+        None=> v,
+        Some(e) => {
+            let mut v = v;
+            v.push(e);
+            v
+        }
+    }
+};
+
+//=========================================
+// RULES
+//=========================================
+
+pub Program = Expr;
+
+Expr = {
+    <e:Expr> "+" <t:Term> => Box::new(Expr::BinaryOp(BinaryOpType::Add, e, t)),
+    <e:Expr> "-" <t:Term> => Box::new(Expr::BinaryOp(BinaryOpType::Sub, e, t)),
+    Term
+};
+
+Term = {
+    <t:Term> "*" <f:Factor> => Box::new(Expr::BinaryOp(BinaryOpType::Mul, t, f)),
+    <t:Term> "/" <f:Factor> => Box::new(Expr::BinaryOp(BinaryOpType::Div, t, f)),
+    Factor
+};
+
+Factor: Box<Expr> = {
+    Int32 => Box::new(Expr::Int32(<>)),
+    "(" <Expr> ")",
+    ! => { errors.push(<>); Box::new(Expr::Error) },
+};
+
+
+//=========================================
+// TOKENS
+//=========================================
+
+Int32: i32 = {
+    r"[0-9]+" => i32::from_str(<>).unwrap()
+};

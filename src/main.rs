@@ -4,7 +4,7 @@ use trivm;
 
 fn main() {
     println!("Hello, trinity!");
-    neoc::neoc();
-    neol::neol();
-    trivm::trivm();
+    //neoc::compile(String::from("prog.neo")).unwrap();
+    //neol::neol();
+    //trivm::trivm();
 }

@@ -1,19 +1,32 @@
-use lalrpop_util::{lexer::Token, ParseError};
+use lalrpop_util::{lexer::Token, ErrorRecovery};
+use types::Expr;
 
 #[macro_use] extern crate lalrpop_util;
 
 lalrpop_mod!(pub parser);
 
-mod ast;
+mod types;
 
-#[derive(Debug, Copy, Clone, PartialEq, Eq)]
-pub enum Calculator6Error {
-    InputTooBig,
-    OddNumber,
+#[derive(Debug)]
+pub struct ParseResult<'input> {
+    pub ast: Box<Expr>,
+    pub errors: Option<Vec<ErrorRecovery<usize, Token<'input>, &'input str>>>,
 }
 
-// Ok type is linkable byte code
-pub fn compile<'input>(source: &'input str) -> Result<Box<ast::Expr>, ParseError<usize, Token<'input>, &'input str>> {
+impl<'input> ParseResult<'input> {
+    pub fn new(ast: Box<Expr>, errors: Option<Vec<ErrorRecovery<usize, Token<'input>, &'input str>>>) -> Self {
+        Self { ast, errors }
+    }
+}
+
+pub fn compile<'input>(source: &'input str) -> ParseResult {
     let mut errors = Vec::new();
-    parser::ProgramParser::new().parse(&mut errors, source)
+    let ast = parser::ProgramParser::new().parse(&mut errors, source)
+        .expect("FATAL: `parse()` should absolutely have not returned an `Err` variant");
+    if errors.len() > 0 {
+        ParseResult::new(ast, Some(errors))
+    }
+    else {
+        ParseResult::new(ast, None)
+    }
 }

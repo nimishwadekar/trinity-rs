@@ -8,7 +8,7 @@ use std::fmt::Debug;
 pub enum Expr {
     BinaryOp(BinaryOpType, Box<Expr>, Box<Expr>),
     Int32(i32),
-    Error,
+    Error, // Add custom errors
 }
 
 #[derive(Copy, Clone, Debug)]
@@ -18,3 +18,8 @@ pub enum BinaryOpType {
     Mul,
     Div,
 }
+
+
+//=========================================
+// IMPLEMENTATIONS
+//=========================================

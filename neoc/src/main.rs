@@ -1,5 +1,5 @@
 use neoc;
-use std::{env, fs, process};
+use std::{env, fs};
 
 fn main() {
     let args: Vec<String> = env::args().collect();
@@ -8,13 +8,16 @@ fn main() {
     }
     
     let source = fs::read_to_string(&args[1]).unwrap();
-    let output = match neoc::compile(&source) {
-        Ok(output) => output,
-        Err(e) => {
-            eprintln!("ERROR: {}", e);
-            process::exit(1);
-        }
-    };
+    let parse_result = neoc::compile(&source);
 
-    dbg!(output);
+    match parse_result.errors {
+        Some(errors) => {
+            eprintln!("********** PARSER ERRORS **********");
+            eprintln!("AST = {:#?}", parse_result.ast);
+            eprintln!("Errors = {:#?}", errors);
+        },
+        None => {
+            eprintln!("AST = {:#?}", parse_result.ast);
+        }
+    }
 }

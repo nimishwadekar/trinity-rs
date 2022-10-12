@@ -1,4 +1,4 @@
-use neoc;
+use neoc::{self, debug};
 use std::{env, fs};
 
 fn main() {
@@ -8,5 +8,5 @@ fn main() {
     }
     
     let source = fs::read_to_string(&args[1]).unwrap();
-    neoc::compile(&source).unwrap();
+    debug!(neoc::compile(&source).unwrap());
 }

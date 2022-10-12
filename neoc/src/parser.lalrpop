@@ -1,5 +1,5 @@
 use std::str::FromStr;
-use crate::ast::{Ast, Expr, BinaryOpType};
+use crate::ast::{Ast, Stmt, Expr, BinaryOpType};
 use lalrpop_util::ErrorRecovery;
 
 grammar<'err>(errors: &'err mut Vec<ErrorRecovery<usize, Token<'input>, &'static str>>);
@@ -8,7 +8,7 @@ grammar<'err>(errors: &'err mut Vec<ErrorRecovery<usize, Token<'input>, &'static
 // MACROS
 //=========================================
 
-Comma<T>: Vec<T> = {
+CommaList<T>: Vec<T> = {
     <v:(<T> ",")*> <e:T?> => match e {
         None=> v,
         Some(e) => {
@@ -24,7 +24,11 @@ Comma<T>: Vec<T> = {
 //=========================================
 
 pub Program: Ast = {
-    Expr => Ast::new(<>),
+    Stmt* => Ast::new(<>),
+};
+
+Stmt: Box<Stmt> = {
+    <Expr> ";" => Box::new(Stmt::Expr(<>)),
 };
 
 Expr = {

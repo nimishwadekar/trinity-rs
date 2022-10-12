@@ -3,4 +3,6 @@ pub enum CompilationError {
     InvalidToken,
     UnexpectedEOF,
     UnrecognizedToken,
+
+    TooManyConstants,
 }

@@ -1,14 +1,28 @@
-use lalrpop_util::{lexer::Token, ErrorRecovery};
-use code::{ByteCodeGenerator, ByteCode};
-use error::CompilationError;
-
 use crate::{
-    ast::{Ast, Expr},
+    ast::Ast,
+    code::ByteCode,
+    error::CompilationError,
+};
+use lalrpop_util::{
+    ErrorRecovery,
+    lexer::Token,
 };
 
 #[macro_use] extern crate lalrpop_util;
 
 lalrpop_mod!(pub parser);
+
+#[cfg(debug_assertions)]
+#[macro_export]
+macro_rules! debug {
+    ($x:expr) => { dbg!($x) }
+}
+
+#[cfg(not(debug_assertions))]
+#[macro_export]
+macro_rules! debug {
+    ($x:expr) => { std::convert::identity($x) }
+}
 
 mod ast;
 mod code;
@@ -24,21 +38,21 @@ pub fn compile<'input>(source: &'input str) -> Result<ByteCode, CompilationError
         Err(e) => {
             use lalrpop_util::ParseError::*;
             return Err(match e {
-                InvalidToken { location } => CompilationError::InvalidToken,
+                InvalidToken { location: _ } => CompilationError::InvalidToken,
                 e => panic!("Some error that should not have come here: {:?}", e),
             });
         },
     };
 
-    ast.pretty_print_stdout();
-    dbg!(&errors);
+    debug!(&ast);
+    debug!(&errors);
 
     if errors.len() > 0 {
         // Parse errors and return error information.
-        return Err(CompilationError::UnrecognizedToken); // TEMP empty return.
+        return Err(CompilationError::UnrecognizedToken); // TEMP return.
     }
 
     // AST to Byte code
 
-    ByteCodeGenerator::generate_code(ast)
+    ByteCode::generate_code(ast)
 }

@@ -1,34 +1,21 @@
-use crate::{
-    ast::Ast,
-    code::ByteCode,
-    error::CompilationError,
-};
+use crate::{ast::Ast, code::ByteCode};
 use lalrpop_util::{
     ErrorRecovery,
     lexer::Token,
 };
+use neo_util::{LinkableByteCode, debug};
 
 #[macro_use] extern crate lalrpop_util;
 
 lalrpop_mod!(pub parser);
 
-#[cfg(debug_assertions)]
-#[macro_export]
-macro_rules! debug {
-    ($x:expr) => { dbg!($x) }
-}
-
-#[cfg(not(debug_assertions))]
-#[macro_export]
-macro_rules! debug {
-    ($x:expr) => { std::convert::identity($x) }
-}
-
 mod ast;
 mod code;
 mod error;
 
-pub fn compile<'input>(source: &'input str) -> Result<ByteCode, CompilationError> {
+pub use error::CompilationError;
+
+pub fn compile<'input>(source: &'input str) -> Result<LinkableByteCode, CompilationError> {
     
     // Source to AST
 
@@ -54,5 +41,5 @@ pub fn compile<'input>(source: &'input str) -> Result<ByteCode, CompilationError
 
     // AST to Byte code
 
-    ByteCode::generate_code(ast)
+    debug!(ByteCode::generate_code(ast))
 }

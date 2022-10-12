@@ -1,5 +1,3 @@
-use core::fmt::Debug;
-
 use crate::{
     ast::{
         Ast,
@@ -12,74 +10,32 @@ use crate::{
         *,
     },
 };
-use Instruction::*;
+use neo_util::{Instruction::*, LinkableByteCode};
 
 //=========================================
 // TYPES
 //=========================================
 
-pub enum Instruction {
-    // Operations
-    Add,
-    Sub,
-    Mul,
-    Div,
-
-    // Stack Manipulation
-    /// Loads the constant at `index` in the constant pool
-    Load{index: u8},
-}
-
-pub struct ByteCode {
-    code: Vec<Instruction>,
-    constants: Vec<i32>,
-}
-
+pub struct ByteCode(LinkableByteCode);
 
 //=========================================
 // IMPLEMENTATIONS
 //=========================================
 
-impl Debug for Instruction {
-    fn fmt(&self, f: &mut std::fmt::Formatter) -> Result<(), std::fmt::Error> {
-        match self {
-            Add => write!(f, "add"),
-            Sub => write!(f, "sub"),
-            Mul => write!(f, "mul"),
-            Div => write!(f, "div"),
-
-            Load { index } => write!(f, "load {:?}", index),
-        }
-    }
-}
-
-impl Debug for ByteCode {
-    fn fmt(&self, f: &mut std::fmt::Formatter) -> Result<(), std::fmt::Error> {
-        writeln!(f, "ByteCode {{\nCode:")?;
-        for (i, instruction) in self.code.iter().enumerate() {
-            writeln!(f, "\t{i}\t{:?}", instruction)?;
-        }
-        writeln!(f, "\nConstants:")?;
-        for (i, &constant) in self.constants.iter().enumerate() {
-            writeln!(f, "\t{i}\t{:?}", constant)?;
-        }
-        Ok(())
-    }
-}
-
+#[allow(non_snake_case)]
 impl ByteCode {
     /// Traverses the AST to generate byte code.
-    pub fn generate_code(ast: Ast) -> Result<ByteCode, CompilationError> {
-        let mut byte_code = Self {
+    pub fn generate_code(ast: Ast) -> Result<LinkableByteCode, CompilationError> {
+        let mut byte_code = Self (LinkableByteCode {
             code: Vec::new(),
             constants: Vec::new(),
-        };
+        });
 
         for stmt in ast.unwrap() {
             byte_code.generate_stmt_tree_code(&stmt)?;
         }
 
-        Ok(byte_code)
+        Ok(byte_code.0)
     }
 
     //=========================================
@@ -89,7 +45,11 @@ impl ByteCode {
     fn generate_stmt_tree_code(&mut self, stmt: &Box<Stmt>) -> Result<(), CompilationError> {
         use Stmt::*;
         match stmt.as_ref() {
-            Expr(expr) => self.generate_expr_tree_code(expr),
+            Expr(expr) => {
+                self.generate_expr_tree_code(expr)?;
+                self.0.code.push(Pop);
+                Ok(())
+            },
         }
     }
 
@@ -109,9 +69,9 @@ impl ByteCode {
             Error => panic!("FATAL: Should never have reached code generation phase."),
         }
     }
-
+    
     fn generate_expr_BinaryOp(&mut self, op: &BinaryOpType) -> Result<(), CompilationError> {
-        self.code.push(match op {
+        self.0.code.push(match op {
             BinaryOpType::Add => Add,
             BinaryOpType::Sub => Sub,
             BinaryOpType::Mul => Mul,
@@ -121,13 +81,13 @@ impl ByteCode {
     }
 
     fn generate_expr_Int32(&mut self, i: &i32) -> Result<(), CompilationError> {
-        let index = self.constants.len() + 1;
+        let index = self.0.constants.len() + 1;
         if index > u8::MAX as usize {
             return Err(TooManyConstants);
         }
 
-        self.constants.push(*i);
-        self.code.push(Load{index: index as u8});
+        self.0.constants.push(*i);
+        self.0.code.push(Load{index: index as u8});
         Ok(())
     }
 }

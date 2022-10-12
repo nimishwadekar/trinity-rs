@@ -1,5 +1,6 @@
-use neoc::{self, debug};
+use neoc;
 use std::{env, fs};
+use neo_util::debug;
 
 fn main() {
     let args: Vec<String> = env::args().collect();

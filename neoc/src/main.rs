@@ -8,16 +8,5 @@ fn main() {
     }
     
     let source = fs::read_to_string(&args[1]).unwrap();
-    let parse_result = neoc::compile(&source);
-
-    match parse_result.errors {
-        Some(errors) => {
-            eprintln!("********** PARSER ERRORS **********");
-            eprintln!("AST = {:#?}", parse_result.ast);
-            eprintln!("Errors = {:#?}", errors);
-        },
-        None => {
-            eprintln!("AST = {:#?}", parse_result.ast);
-        }
-    }
+    neoc::compile(&source).unwrap();
 }

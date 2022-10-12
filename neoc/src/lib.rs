@@ -1,32 +1,44 @@
 use lalrpop_util::{lexer::Token, ErrorRecovery};
-use types::Expr;
+use code::{ByteCodeGenerator, ByteCode};
+use error::CompilationError;
+
+use crate::{
+    ast::{Ast, Expr},
+};
 
 #[macro_use] extern crate lalrpop_util;
 
 lalrpop_mod!(pub parser);
 
-mod types;
+mod ast;
+mod code;
+mod error;
 
-#[derive(Debug)]
-pub struct ParseResult<'input> {
-    pub ast: Box<Expr>,
-    pub errors: Option<Vec<ErrorRecovery<usize, Token<'input>, &'input str>>>,
-}
+pub fn compile<'input>(source: &'input str) -> Result<ByteCode, CompilationError> {
+    
+    // Source to AST
 
-impl<'input> ParseResult<'input> {
-    pub fn new(ast: Box<Expr>, errors: Option<Vec<ErrorRecovery<usize, Token<'input>, &'input str>>>) -> Self {
-        Self { ast, errors }
-    }
-}
+    let mut errors: Vec<ErrorRecovery<usize, Token, &str>> = Vec::new();
+    let ast: Ast = match parser::ProgramParser::new().parse(&mut errors, source) {
+        Ok(ast) => ast,
+        Err(e) => {
+            use lalrpop_util::ParseError::*;
+            return Err(match e {
+                InvalidToken { location } => CompilationError::InvalidToken,
+                e => panic!("Some error that should not have come here: {:?}", e),
+            });
+        },
+    };
 
-pub fn compile<'input>(source: &'input str) -> ParseResult {
-    let mut errors = Vec::new();
-    let ast = parser::ProgramParser::new().parse(&mut errors, source)
-        .expect("FATAL: `parse()` should absolutely have not returned an `Err` variant");
+    ast.pretty_print_stdout();
+    dbg!(&errors);
+
     if errors.len() > 0 {
-        ParseResult::new(ast, Some(errors))
+        // Parse errors and return error information.
+        return Err(CompilationError::UnrecognizedToken); // TEMP empty return.
     }
-    else {
-        ParseResult::new(ast, None)
-    }
+
+    // AST to Byte code
+
+    ByteCodeGenerator::generate_code(ast)
 }

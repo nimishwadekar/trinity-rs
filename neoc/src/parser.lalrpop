@@ -1,5 +1,5 @@
 use std::str::FromStr;
-use crate::types::{Expr, BinaryOpType};
+use crate::ast::{Ast, Expr, BinaryOpType};
 use lalrpop_util::ErrorRecovery;
 
 grammar<'err>(errors: &'err mut Vec<ErrorRecovery<usize, Token<'input>, &'static str>>);
@@ -23,7 +23,9 @@ Comma<T>: Vec<T> = {
 // RULES
 //=========================================
 
-pub Program = Expr;
+pub Program: Ast = {
+    Expr => Ast::new(<>),
+};
 
 Expr = {
     <e:Expr> "+" <t:Term> => Box::new(Expr::BinaryOp(BinaryOpType::Add, e, t)),

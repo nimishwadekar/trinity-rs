@@ -43,14 +43,20 @@ impl ByteCode {
     //=========================================
 
     fn generate_stmt_tree_code(&mut self, stmt: &Box<Stmt>) -> Result<(), CompilationError> {
-        use Stmt::*;
         match stmt.as_ref() {
-            Expr(expr) => {
+            Stmt::Expr(expr) => {
                 self.generate_expr_tree_code(expr)?;
                 self.0.code.push(Pop);
                 Ok(())
             },
-            Nop => Ok(()),
+
+            Stmt::Print(expr) => {
+                self.generate_expr_tree_code(expr)?;
+                self.0.code.push(Print);
+                Ok(())
+            },
+
+            Stmt::Nop => Ok(()),
         }
     }
 
@@ -59,15 +65,16 @@ impl ByteCode {
     //=========================================
 
     fn generate_expr_tree_code(&mut self, expr: &Box<Expr>) -> Result<(), CompilationError> {
-        use Expr::*;
         match expr.as_ref() {
-            BinaryOp(op, l, r) => {
+            Expr::BinaryOp(op, l, r) => {
                 self.generate_expr_tree_code(l)?;
                 self.generate_expr_tree_code(r)?;
                 self.generate_expr_BinaryOp(op)
             },
-            Int32(i) => self.generate_expr_Int32(i),
-            Error => panic!("FATAL: Should never have reached code generation phase."),
+
+            Expr::Int32(i) => self.generate_expr_Int32(i),
+            
+            Expr::Error => panic!("FATAL: Should never have reached code generation phase."),
         }
     }
     

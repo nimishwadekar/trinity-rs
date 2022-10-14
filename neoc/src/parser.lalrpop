@@ -36,6 +36,7 @@ pub Program: Ast = {
 
 Stmt: Box<Stmt> = {
     <Expr> ";" => Box::new(Stmt::Expr(<>)),
+    "print" <Expr> ";" => Box::new(Stmt::Print(<>)),
     ";" => Box::new(Stmt::Nop),
 };
 

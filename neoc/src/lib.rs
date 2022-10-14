@@ -40,6 +40,6 @@ pub fn compile<'input>(source: &'input str) -> Result<LinkableByteCode, Vec<Comp
 
     match ByteCode::generate_code(ast) {
         Err(e) => Err(vec![e]),
-        Ok(code) => Ok(code),
+        Ok(code) => Ok(debug!(code)),
     }
 }

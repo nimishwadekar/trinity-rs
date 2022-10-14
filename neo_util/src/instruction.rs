@@ -9,8 +9,11 @@ pub enum Instruction {
 
     // Stack Manipulation
     /// Loads the constant at `index` in the constant pool.
-    Load{index: u8},
+    Load { index: u8 },
     Pop,
+
+    // IO
+    Print,
 }
 
 impl Debug for Instruction {
@@ -24,6 +27,8 @@ impl Debug for Instruction {
 
             Load { index } => write!(f, "load {:?}", index),
             Pop => write!(f, "pop"),
+
+            Print => write!(f, "print"),
         }
     }
 }

@@ -71,7 +71,11 @@ impl Vm {
 
                 Pop => {
                     self.pop();
-                }
+                },
+
+                Print => {
+                    println!("{}", self.pop());
+                },
             };
 
             self.pc += 1;

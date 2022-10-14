@@ -1,8 +1,15 @@
 use std::str::FromStr;
-use crate::ast::{Ast, Stmt, Expr, BinaryOpType};
+use crate::{
+    ast::{Ast, Stmt, Expr, BinaryOpType},
+    CompilationError,
+};
 use lalrpop_util::ErrorRecovery;
 
-grammar<'err>(errors: &'err mut Vec<ErrorRecovery<usize, Token<'input>, &'static str>>);
+grammar<'err>(errors: &'err mut Vec<ErrorRecovery<usize, Token<'input>, CompilationError>>);
+
+extern {
+    type Error = CompilationError;
+}
 
 //=========================================
 // MACROS
@@ -29,6 +36,7 @@ pub Program: Ast = {
 
 Stmt: Box<Stmt> = {
     <Expr> ";" => Box::new(Stmt::Expr(<>)),
+    ";" => Box::new(Stmt::Nop),
 };
 
 Expr = {

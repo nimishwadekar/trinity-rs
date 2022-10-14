@@ -50,6 +50,7 @@ impl ByteCode {
                 self.0.code.push(Pop);
                 Ok(())
             },
+            Nop => Ok(()),
         }
     }
 

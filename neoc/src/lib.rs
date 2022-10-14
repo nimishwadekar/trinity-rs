@@ -15,31 +15,31 @@ mod error;
 
 pub use error::CompilationError;
 
-pub fn compile<'input>(source: &'input str) -> Result<LinkableByteCode, CompilationError> {
+pub fn compile<'input>(source: &'input str) -> Result<LinkableByteCode, Vec<CompilationError>> {
     
     // Source to AST
 
-    let mut errors: Vec<ErrorRecovery<usize, Token, &str>> = Vec::new();
+    let mut errors: Vec<ErrorRecovery<usize, Token, CompilationError>> = Vec::new();
     let ast: Ast = match parser::ProgramParser::new().parse(&mut errors, source) {
         Ok(ast) => ast,
         Err(e) => {
-            use lalrpop_util::ParseError::*;
-            return Err(match e {
-                InvalidToken { location: _ } => CompilationError::InvalidToken,
-                e => panic!("Some error that should not have come here: {:?}", e),
-            });
+            let mut errors = error::parse_errors(errors, source);
+            errors.push(CompilationError::from(e, source));
+            return Err(errors);
         },
     };
 
-    debug!(&ast);
-    debug!(&errors);
-
     if errors.len() > 0 {
         // Parse errors and return error information.
-        return Err(CompilationError::UnrecognizedToken); // TEMP return.
+        return Err(error::parse_errors(errors, source));
     }
+
+    debug!(&ast);
 
     // AST to Byte code
 
-    debug!(ByteCode::generate_code(ast))
+    match ByteCode::generate_code(ast) {
+        Err(e) => Err(vec![e]),
+        Ok(code) => Ok(code),
+    }
 }

@@ -1,6 +1,5 @@
 use neoc;
 use std::{env, fs};
-use neo_util::debug;
 
 fn main() {
     let args: Vec<String> = env::args().collect();
@@ -9,5 +8,7 @@ fn main() {
     }
     
     let source = fs::read_to_string(&args[1]).unwrap();
-    debug!(neoc::compile(&source).unwrap());
+    if let Err(errors) = neoc::compile(&source) {
+        eprintln!("Compilation FAILED:\n{:#?}", errors);
+    }
 }

@@ -10,6 +10,7 @@ pub struct Ast {
 
 pub enum Stmt {
     Expr(Box<Expr>),
+    Nop,
 }
 
 pub enum Expr {
@@ -54,7 +55,8 @@ impl Ast {
             Expr(expr) => {
                 writeln!(f, "{:indent$}Expr", "", indent=indent)?;
                 self.fmt_recurse_expr(f, expr, next_indent)
-            }
+            },
+            Nop => writeln!(f, "{:indent$}Nop", "", indent=indent)
         }
     }
 

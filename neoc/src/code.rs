@@ -2,100 +2,154 @@ use crate::{
     ast::{
         Ast,
         Stmt,
-        Expr, 
-        BinaryOpType,
+        TypedExpr,
+        Expr,
+        Literal,
+        ArithmeticBinOpType,
     },
-    error::CompilationError::{
-        self,
-        *,
-    },
+    error::CompileError,
+    types::DataType,
 };
-use neo_util::{Instruction::*, LinkableByteCode};
+use neo_util::{Instruction, LinkableByteCode};
 
 //=========================================
 // TYPES
 //=========================================
 
-pub struct ByteCode(LinkableByteCode);
+pub struct ByteCodeGenerator{
+    byte_code: LinkableByteCode,
+    //dtype_stack: Vec<DataType>,
+}
 
 //=========================================
 // IMPLEMENTATIONS
 //=========================================
 
 #[allow(non_snake_case)]
-impl ByteCode {
+impl ByteCodeGenerator {
     /// Traverses the AST to generate byte code.
-    pub fn generate_code(ast: Ast) -> Result<LinkableByteCode, CompilationError> {
-        let mut byte_code = Self (LinkableByteCode {
-            code: Vec::new(),
-            constants: Vec::new(),
-        });
+    pub fn generate_code(ast: Ast) -> Result<LinkableByteCode, CompileError> {
+        let mut byte_code = Self::new();
 
         for stmt in ast.unwrap() {
             byte_code.generate_stmt_tree_code(&stmt)?;
         }
 
-        Ok(byte_code.0)
+        Ok(byte_code.byte_code)
     }
 
     //=========================================
     // STMT
     //=========================================
 
-    fn generate_stmt_tree_code(&mut self, stmt: &Box<Stmt>) -> Result<(), CompilationError> {
-        match stmt.as_ref() {
+    fn generate_stmt_tree_code(&mut self, stmt: &Box<Stmt>) -> Result<(), CompileError> {
+        Ok(match stmt.as_ref() {
             Stmt::Expr(expr) => {
                 self.generate_expr_tree_code(expr)?;
-                self.0.code.push(Pop);
-                Ok(())
+                self.push_code(Instruction::Pop);
             },
 
             Stmt::Print(expr) => {
                 self.generate_expr_tree_code(expr)?;
-                self.0.code.push(Print);
-                Ok(())
+                self.push_code(match expr.dtype {
+                    DataType::Int => Instruction::iPrint,
+                    DataType::Bool => Instruction::bPrint,
+                    DataType::Float => Instruction::fPrint,
+                    DataType::Nil => Instruction::nPrint,
+                });
             },
 
-            Stmt::Nop => Ok(()),
-        }
+            Stmt::Nop => (),
+        })
     }
 
     //=========================================
     // EXPR
     //=========================================
 
-    fn generate_expr_tree_code(&mut self, expr: &Box<Expr>) -> Result<(), CompilationError> {
-        match expr.as_ref() {
-            Expr::BinaryOp(op, l, r) => {
+    fn generate_expr_tree_code(&mut self, expr: &Box<TypedExpr>) -> Result<(), CompileError> {
+        let TypedExpr { dtype, expr } = expr.as_ref();
+        match expr {
+            Expr::ArithmeticBinOp(op, l, r) => {
                 self.generate_expr_tree_code(l)?;
                 self.generate_expr_tree_code(r)?;
-                self.generate_expr_BinaryOp(op)
+                self.generate_expr_ArithmeticBinOp(op, dtype)
             },
 
-            Expr::Int32(i) => self.generate_expr_Int32(i),
-            
-            Expr::Error => panic!("FATAL: Should never have reached code generation phase."),
+            Expr::Literal(val) => self.generate_expr_Literal(val),
         }
     }
     
-    fn generate_expr_BinaryOp(&mut self, op: &BinaryOpType) -> Result<(), CompilationError> {
-        self.0.code.push(match op {
-            BinaryOpType::Add => Add,
-            BinaryOpType::Sub => Sub,
-            BinaryOpType::Mul => Mul,
-            BinaryOpType::Div => Div,
+    fn generate_expr_ArithmeticBinOp(&mut self, op: &ArithmeticBinOpType, dtype: &DataType) -> Result<(), CompileError> {
+        self.push_code(match dtype {
+            DataType::Int => match op {
+                ArithmeticBinOpType::Add => Instruction::iAdd,
+                ArithmeticBinOpType::Sub => Instruction::iSub,
+                ArithmeticBinOpType::Mul => Instruction::iMul,
+                ArithmeticBinOpType::Div => Instruction::iDiv,
+            },
+
+            DataType::Float => match op {
+                ArithmeticBinOpType::Add => Instruction::fAdd,
+                ArithmeticBinOpType::Sub => Instruction::fSub,
+                ArithmeticBinOpType::Mul => Instruction::fMul,
+                ArithmeticBinOpType::Div => Instruction::fDiv,
+            },
+
+            t => unreachable!("DataType {} should not have reached code generation for ArithmeticBinOp.", t.to_string()),
         });
         Ok(())
     }
 
-    fn generate_expr_Int32(&mut self, i: &i32) -> Result<(), CompilationError> {
-        let index = self.0.constants.len() + 1;
-        if index > u8::MAX as usize {
-            return Err(TooManyConstants);
-        }
+    fn generate_expr_Literal(&mut self, val: &Literal) -> Result<(), CompileError> {
+        const I_CONSTS: [Instruction; 2] = [
+            Instruction::iConst_0,
+            Instruction::iConst_1,
+        ];
 
-        self.0.constants.push(*i);
-        self.0.code.push(Load{index: index as u8});
+        match val {
+            Literal::Int(val) => {
+                if *val >= 0 && (*val as usize) < I_CONSTS.len() {
+                    self.push_code(I_CONSTS[*val as usize]);
+                    return Ok(())
+                }
+
+                let data = unsafe { std::mem::transmute::<i64, u64>(*val) };
+                let offset = self.push_constant(data);
+                if offset > u8::MAX as usize { return Err(CompileError::TooManyConstants) }
+                self.push_code(Instruction::Const { offset: offset as u8 });
+            },
+
+            Literal::Bool(val) => {
+                self.push_code(match val {
+                    true => Instruction::iConst_1,
+                    false => Instruction::iConst_0,
+                });
+            },
+
+            Literal::Float(val) => {
+                let data = unsafe { std::mem::transmute::<f64, u64>(*val) };
+                let offset = self.push_constant(data);
+                if offset > u8::MAX as usize { return Err(CompileError::TooManyConstants) }
+                self.push_code(Instruction::Const { offset: offset as u8 });
+            },
+
+            Literal::Nil => self.push_code(Instruction::iConst_0),
+        }
         Ok(())
     }
+}
+
+// For trivial wrappers over `LinkableByteCode`.
+impl ByteCodeGenerator {
+    fn new() -> Self {
+        Self {
+            byte_code: LinkableByteCode::new(),
+        }
+    }
+
+    fn push_code(&mut self, instr: Instruction) { self.byte_code.push_code(instr) }
+
+    /// Returns the offset the data is at.
+    fn push_constant(&mut self, data: u64) -> usize { self.byte_code.push_constant(data) }
 }

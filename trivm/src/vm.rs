@@ -11,11 +11,11 @@ use crate::error::RunTimeError::{self, *};
 
 pub struct Vm {
     code: Vec<Instruction>,
-    constants: Vec<i32>,
+    constants: Vec<u64>,
 
     // State
     pc: usize,
-    stack: Vec<i32>,
+    stack: Vec<u64>,
 }
 
 //=========================================
@@ -38,43 +38,88 @@ impl Vm {
     fn run(&mut self) -> Result<(), RunTimeError> {
         while self.pc < self.code.len() {
             match self.code[self.pc] {
-                Add => {
-                    let r = self.pop();
-                    let l = self.pop();
-                    self.push(l + r);
+                iAdd => {
+                    let r = self.pop().transmute_to_i64();
+                    let l = self.pop().transmute_to_i64();
+                    self.push((l + r).transmute_to_u64());
                 },
 
-                Sub => {
-                    let r = self.pop();
-                    let l = self.pop();
-                    self.push(l - r);
+                iSub => {
+                    let r = self.pop().transmute_to_i64();
+                    let l = self.pop().transmute_to_i64();
+                    self.push((l - r).transmute_to_u64());
                 },
 
-                Mul => {
-                    let r = self.pop();
-                    let l = self.pop();
-                    self.push(l * r);
+                iMul => {
+                    let r = self.pop().transmute_to_i64();
+                    let l = self.pop().transmute_to_i64();
+                    self.push((l * r).transmute_to_u64());
                 },
 
-                Div => {
-                    let r = self.pop();
-                    let l = self.pop();
+                iDiv => {
+                    let r = self.pop().transmute_to_i64();
+                    let l = self.pop().transmute_to_i64();
                     if r == 0 {
                         return Err(DivideByZero);
                     }
-                    self.push(l / r);
+                    self.push((l / r).transmute_to_u64());
                 },
 
-                Load { index } => {
-                    self.push(self.get_constant(index as usize));
+                fAdd => {
+                    let r = self.pop().transmute_to_f64();
+                    let l = self.pop().transmute_to_f64();
+                    self.push((l + r).transmute_to_u64());
+                },
+
+                fSub => {
+                    let r = self.pop().transmute_to_f64();
+                    let l = self.pop().transmute_to_f64();
+                    self.push((l - r).transmute_to_u64());
+                },
+
+                fMul => {
+                    let r = self.pop().transmute_to_f64();
+                    let l = self.pop().transmute_to_f64();
+                    self.push((l * r).transmute_to_u64());
+                },
+
+                fDiv => {
+                    let r = self.pop().transmute_to_f64();
+                    let l = self.pop().transmute_to_f64();
+                    self.push((l / r).transmute_to_u64());
+                },
+
+                Const { offset } => {
+                    self.push(self.get_constant(offset as usize));
+                },
+
+                iConst_0 => {
+                    self.push(0);
+                },
+
+                iConst_1 => {
+                    self.push(1);
                 },
 
                 Pop => {
                     self.pop();
                 },
 
-                Print => {
-                    println!("{}", self.pop());
+                iPrint => {
+                    println!("{}", self.pop().transmute_to_i64());
+                },
+
+                bPrint => {
+                    println!("{}", self.pop().transmute_to_bool());
+                },
+
+                fPrint => {
+                    println!("{}", self.pop().transmute_to_f64());
+                },
+
+                nPrint => {
+                    assert_eq!(self.pop(), 0);
+                    println!("nil");
                 },
             };
 
@@ -86,7 +131,51 @@ impl Vm {
         Ok(())
     }
 
-    fn push(&mut self, value: i32) { self.stack.push(value) }
-    fn pop(&mut self) -> i32 { self.stack.pop().unwrap() }
-    fn get_constant(&self, index: usize) -> i32 { self.constants[index - 1] }
+    fn push(&mut self, value: u64) { self.stack.push(value) }
+    fn pop(&mut self) -> u64 { self.stack.pop().unwrap() }
+    fn get_constant(&self, offset: usize) -> u64 { self.constants[offset] }
+}
+
+// Trait for transmute
+
+trait TransmuteToU64 {
+    fn transmute_to_u64(&self) -> u64;
+}
+
+impl TransmuteToU64 for i64 {
+    fn transmute_to_u64(&self) -> u64 {
+        unsafe { std::mem::transmute(*self) }
+    }
+}
+
+impl TransmuteToU64 for bool {
+    fn transmute_to_u64(&self) -> u64 {
+        if *self { 1 } else { 0 }
+    }
+}
+
+impl TransmuteToU64 for f64 {
+    fn transmute_to_u64(&self) -> u64 {
+        unsafe { std::mem::transmute(*self) }
+    }
+}
+
+trait TransmuteToMany {
+    fn transmute_to_i64(&self) -> i64;
+    fn transmute_to_bool(&self) -> bool;
+    fn transmute_to_f64(&self) -> f64;
+}
+
+impl TransmuteToMany for u64 {
+    fn transmute_to_i64(&self) -> i64 {
+        unsafe { std::mem::transmute(*self) }
+    }
+
+    fn transmute_to_bool(&self) -> bool {
+        if *self == 1 { true } else { false }
+    }
+
+    fn transmute_to_f64(&self) -> f64 {
+        unsafe { std::mem::transmute(*self) }
+    }
 }

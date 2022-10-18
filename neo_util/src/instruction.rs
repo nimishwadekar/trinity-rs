@@ -1,34 +1,64 @@
 use std::fmt::Debug;
 
+/// Prefixes:
+/// i - int
+/// b - bool
+/// f - float
+/// n - nil
+#[allow(non_camel_case_types)]
+#[derive(Clone, Copy)]
 pub enum Instruction {
     // Operations
-    Add,
-    Sub,
-    Mul,
-    Div,
+    iAdd,
+    iSub,
+    iMul,
+    iDiv,
+
+    fAdd,
+    fSub,
+    fMul,
+    fDiv,
 
     // Stack Manipulation
-    /// Loads the constant at `index` in the constant pool.
-    Load { index: u8 },
+    /// Loads the constant at `offset` in the constant pool.
+    Const { offset: u8 },
+    /// Loads the integer `0` onto the stack. Also used to represent `false` and `nil`.
+    iConst_0,
+    /// Loads the integer `1` onto the stack. Also used to represent `true`.
+    iConst_1,
+    /// Pops and discards the top element from the stack.
     Pop,
 
     // IO
-    Print,
+    iPrint,
+    bPrint,
+    fPrint,
+    nPrint,
 }
 
 impl Debug for Instruction {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> Result<(), std::fmt::Error> {
         use Instruction::*;
         match self {
-            Add => write!(f, "add"),
-            Sub => write!(f, "sub"),
-            Mul => write!(f, "mul"),
-            Div => write!(f, "div"),
+            iAdd => write!(f, "iAdd"),
+            iSub => write!(f, "iSub"),
+            iMul => write!(f, "iMul"),
+            iDiv => write!(f, "iDiv"),
 
-            Load { index } => write!(f, "load {:?}", index),
-            Pop => write!(f, "pop"),
+            fAdd => write!(f, "fAdd"),
+            fSub => write!(f, "fSub"),
+            fMul => write!(f, "fMul"),
+            fDiv => write!(f, "fDiv"),
 
-            Print => write!(f, "print"),
+            Const { offset } => write!(f, "Const {:?}", offset),
+            iConst_0 => write!(f, "iConst_0"),
+            iConst_1 => write!(f, "iConst_1"),
+            Pop => write!(f, "Pop"),
+
+            iPrint => write!(f, "iPrint"),
+            bPrint => write!(f, "bPrint"),
+            fPrint => write!(f, "fPrint"),
+            nPrint => write!(f, "nPrint"),
         }
     }
 }

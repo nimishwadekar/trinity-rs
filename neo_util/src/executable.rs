@@ -1,10 +1,10 @@
 use std::fmt::Debug;
 
-use crate::Instruction;
+use crate::{Instruction};
 
 pub struct ExecutableByteCode {
     pub code: Vec<Instruction>,
-    pub constants: Vec<i32>,
+    pub constants: Vec<u64>,
 }
 
 impl Debug for ExecutableByteCode {

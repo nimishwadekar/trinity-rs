@@ -1,14 +1,14 @@
 use std::str::FromStr;
 use crate::{
-    ast::{Ast, Stmt, Expr, BinaryOpType},
-    CompilationError,
+    parsetree::{ParseTree, Stmt, Expr, ArithmeticBinOpType},
+    error as neoc_error,
 };
 use lalrpop_util::ErrorRecovery;
 
-grammar<'err>(errors: &'err mut Vec<ErrorRecovery<usize, Token<'input>, CompilationError>>);
+grammar<'err>(errors: &'err mut Vec<ErrorRecovery<usize, Token<'input>, neoc_error::ParseError>>);
 
 extern {
-    type Error = CompilationError;
+    type Error = neoc_error::ParseError;
 }
 
 //=========================================
@@ -27,11 +27,11 @@ CommaList<T>: Vec<T> = {
 };
 
 //=========================================
-// RULES
+// NON-TERMINALS
 //=========================================
 
-pub Program: Ast = {
-    Stmt* => Ast::new(<>),
+pub Program: ParseTree = {
+    Stmt* => ParseTree::new(<>),
 };
 
 Stmt: Box<Stmt> = {
@@ -41,28 +41,44 @@ Stmt: Box<Stmt> = {
 };
 
 Expr = {
-    <e:Expr> "+" <t:Term> => Box::new(Expr::BinaryOp(BinaryOpType::Add, e, t)),
-    <e:Expr> "-" <t:Term> => Box::new(Expr::BinaryOp(BinaryOpType::Sub, e, t)),
+    <e:Expr> "+" <t:Term> => Box::new(Expr::ArithmeticBinOp(ArithmeticBinOpType::Add, e, t)),
+    <e:Expr> "-" <t:Term> => Box::new(Expr::ArithmeticBinOp(ArithmeticBinOpType::Sub, e, t)),
     Term
 };
 
 Term = {
-    <t:Term> "*" <f:Factor> => Box::new(Expr::BinaryOp(BinaryOpType::Mul, t, f)),
-    <t:Term> "/" <f:Factor> => Box::new(Expr::BinaryOp(BinaryOpType::Div, t, f)),
+    <t:Term> "*" <f:Factor> => Box::new(Expr::ArithmeticBinOp(ArithmeticBinOpType::Mul, t, f)),
+    <t:Term> "/" <f:Factor> => Box::new(Expr::ArithmeticBinOp(ArithmeticBinOpType::Div, t, f)),
     Factor
 };
 
 Factor: Box<Expr> = {
-    Int32 => Box::new(Expr::Int32(<>)),
+    Int => Box::new(Expr::Int(<>)),
+    Bool => Box::new(Expr::Bool(<>)),
+    Float => Box::new(Expr::Float(<>)),
+    Nil => Box::new(Expr::Nil),
     "(" <Expr> ")",
     ! => { errors.push(<>); Box::new(Expr::Error) },
 };
 
 
 //=========================================
-// TOKENS
+// TERMINALS
 //=========================================
 
-Int32: i32 = {
-    r"[0-9]+" => i32::from_str(<>).unwrap()
+Int: i64 = {
+    r"[0-9]+" => i64::from_str(<>).unwrap()
+};
+
+Bool: bool = {
+    "true" => true,
+    "false" => false,
+};
+
+Float: f64 = {
+    r"[0-9]+\.[0-9]+" => f64::from_str(<>).unwrap()
+};
+
+Nil: () = {
+    "nil" => (),
 };

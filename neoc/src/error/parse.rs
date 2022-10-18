@@ -1,10 +1,12 @@
 use std::fmt::Debug;
 
 use lalrpop_util::{
+    self as lalrpop,
     ErrorRecovery,
     lexer::Token,
-    ParseError,
 };
+
+use crate::NeoCError;
 
 //=========================================
 // TYPES
@@ -16,15 +18,11 @@ pub struct Location {
 }
 
 #[derive(Debug)]
-pub enum CompilationError {
-    // Parsing Errors
+pub enum ParseError {
     InvalidToken { location: Location },
     UnexpectedEOF,
     UnrecognizedToken { location: Location, lexeme: String },
     ExtraToken { location: Location, lexeme: String },
-
-    // Code Generation Errors
-    TooManyConstants,
 }
 
 //=========================================
@@ -68,26 +66,26 @@ impl Location {
     }
 }
 
-impl CompilationError {
-    pub fn from(e: ParseError<usize, Token, CompilationError>, source: &str) -> Self {
+impl ParseError {
+    pub fn from(e: lalrpop::ParseError<usize, Token, ParseError>, source: &str) -> Self {
         match e {
-            ParseError::InvalidToken { location } => Self::InvalidToken {
+            lalrpop::ParseError::InvalidToken { location } => Self::InvalidToken {
                 location: Location::from(source, location).expect("Location parsing failed"),
             },
 
-            ParseError::UnrecognizedEOF { .. } => Self::UnexpectedEOF,
+            lalrpop::ParseError::UnrecognizedEOF { .. } => Self::UnexpectedEOF,
 
-            ParseError::UnrecognizedToken { token, .. } => Self::UnrecognizedToken {
+            lalrpop::ParseError::UnrecognizedToken { token, .. } => Self::UnrecognizedToken {
                 location: Location::from(source, token.0).expect("Location parsing failed"),
                 lexeme: String::from(token.1.1)
             },
 
-            ParseError::ExtraToken { token } => Self::ExtraToken {
+            lalrpop::ParseError::ExtraToken { token } => Self::ExtraToken {
                 location: Location::from(source, token.0).expect("Location parsing failed"),
                 lexeme: String::from(token.1.1)
             },
 
-            ParseError::User { error } => error,
+            lalrpop::ParseError::User { error } => error,
         }
     }
 }
@@ -96,10 +94,10 @@ impl CompilationError {
 // GENERAL FUNCTIONS
 //=========================================
 
-pub fn parse_errors(errors: Vec<ErrorRecovery<usize, Token, CompilationError>>, source: &str) -> Vec<CompilationError> {
+pub fn parse_errors(errors: Vec<ErrorRecovery<usize, Token, ParseError>>, source: &str) -> Vec<NeoCError> {
     let mut compilation_errors = Vec::new();
     for e in errors {
-        compilation_errors.push(CompilationError::from(e.error, source));
+        compilation_errors.push(NeoCError::Parse(ParseError::from(e.error, source)));
     }
     compilation_errors
 }

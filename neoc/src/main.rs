@@ -8,7 +8,9 @@ fn main() {
     }
     
     let source = fs::read_to_string(&args[1]).unwrap();
-    if let Err(errors) = neoc::compile(&source) {
-        eprintln!("Compilation FAILED:\n{:#?}", errors);
+
+    match neoc::compile(&source) {
+        Ok(code) => (),
+        Err(errors) => eprintln!("Compilation FAILED:\n{:#?}", errors),
     }
 }

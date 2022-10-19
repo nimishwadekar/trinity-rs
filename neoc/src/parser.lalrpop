@@ -37,6 +37,7 @@ pub Program: ParseTree = {
 Stmt: Box<Stmt> = {
     <Expr> ";" => Box::new(Stmt::Expr(<>)),
     "print" <Expr> ";" => Box::new(Stmt::Print(<>)),
+    "var" <ident:Ident> ":" <dtype:Ident> "=" <val:Expr> ";" => Box::new(Stmt::GlobalDecl{ident, dtype, val}),
     ";" => Box::new(Stmt::Nop),
 };
 
@@ -53,11 +54,12 @@ Term = {
 };
 
 Factor: Box<Expr> = {
+    "(" <Expr> ")",
+    Ident => Box::new(Expr::Variable(<>)),
     Int => Box::new(Expr::Int(<>)),
     Bool => Box::new(Expr::Bool(<>)),
     Float => Box::new(Expr::Float(<>)),
     Nil => Box::new(Expr::Nil),
-    "(" <Expr> ")",
     ! => { errors.push(<>); Box::new(Expr::Error) },
 };
 
@@ -81,4 +83,8 @@ Float: f64 = {
 
 Nil: () = {
     "nil" => (),
+};
+
+Ident: String = {
+    r"[_A-Za-z][_A-Za-z0-9]*" => String::from(<>),
 };

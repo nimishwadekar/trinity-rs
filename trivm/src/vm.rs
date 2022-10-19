@@ -10,12 +10,12 @@ use crate::error::RunTimeError::{self, *};
 //=========================================
 
 pub struct Vm {
-    code: Vec<Instruction>,
     constants: Vec<u64>,
 
     // State
     pc: usize,
     stack: Vec<u64>,
+    data: Vec<u64>,
 }
 
 //=========================================
@@ -24,20 +24,29 @@ pub struct Vm {
 
 impl Vm {
     pub fn execute(code: ExecutableByteCode) -> Result<(), RunTimeError> {
-        let ExecutableByteCode {code, constants} = code;
-        let mut vm = Vm {
+        let ExecutableByteCode {
             code,
             constants,
+            data_init_code,
+            data_count
+        } = code;
+        
+        let mut vm = Vm {
+            constants,
+
             pc: 0,
             stack: Vec::new(),
+            data: vec![0; data_count],
         };
 
-        vm.run()
+        vm.run(&data_init_code)?;
+        vm.run(&code)
     }
 
-    fn run(&mut self) -> Result<(), RunTimeError> {
-        while self.pc < self.code.len() {
-            match self.code[self.pc] {
+    fn run(&mut self, code: &Vec<Instruction>) -> Result<(), RunTimeError> {
+        self.pc = 0;
+        while self.pc < code.len() {
+            match code[self.pc] {
                 iAdd => {
                     let r = self.pop().transmute_to_i64();
                     let l = self.pop().transmute_to_i64();
@@ -89,6 +98,15 @@ impl Vm {
                     self.push((l / r).transmute_to_u64());
                 },
 
+                StoreGlobal { offset } => {
+                    let val = self.pop();
+                    self.data[offset as usize] = val;
+                },
+
+                LoadGlobal { offset } => {
+                    self.push(self.data[offset as usize]);
+                },
+
                 Const { offset } => {
                     self.push(self.get_constant(offset as usize));
                 },
@@ -123,10 +141,9 @@ impl Vm {
                 },
             };
 
+            //debug!(&self.stack);
             self.pc += 1;
         }
-
-        debug!(&self.stack);
 
         Ok(())
     }

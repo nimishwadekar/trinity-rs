@@ -5,6 +5,8 @@ use crate::{Instruction};
 pub struct ExecutableByteCode {
     pub code: Vec<Instruction>,
     pub constants: Vec<u64>,
+    pub data_init_code: Vec<Instruction>,
+    pub data_count: usize,
 }
 
 impl Debug for ExecutableByteCode {

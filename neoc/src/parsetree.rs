@@ -11,11 +11,14 @@ pub struct ParseTree {
 pub enum Stmt {
     Expr(Box<Expr>),
     Print(Box<Expr>),
+    GlobalDecl{ ident: String, dtype: String, val: Box<Expr> },
     Nop,
+    Error,
 }
 
 pub enum Expr {
     ArithmeticBinOp(ArithmeticBinOpType, Box<Expr>, Box<Expr>),
+    Variable(String),
     Int(i64),
     Bool(bool),
     Float(f64),
@@ -39,7 +42,7 @@ impl Debug for ParseTree {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> Result<(), std::fmt::Error> {
         writeln!(f, "ParseTree:")?;
         for stmt in &self.tree {
-            self.fmt_recurse_stmt(f, stmt, 0)?;
+            self.fmt_recurse_stmt(f, stmt, 2)?;
         }
         Ok(())
     }
@@ -81,7 +84,14 @@ impl ParseTree {
                 self.fmt_recurse_expr(f, expr, next_indent)
             },
 
-            Nop => writeln!(f, "{:indent$}Nop", "", indent=indent)
+            GlobalDecl { ident, dtype, val } => {
+                writeln!(f, "{:indent$}GlobalDecl \"{ident}\" <{dtype}>", "", indent=indent)?;
+                self.fmt_recurse_expr(f, val, next_indent)
+            },
+
+            Nop => writeln!(f, "{:indent$}Nop", "", indent=indent),
+
+            Error => writeln!(f, "{:indent$}Error", "", indent=indent),
         }
     }
 
@@ -94,6 +104,8 @@ impl ParseTree {
                 self.fmt_recurse_expr(f, l, next_indent)?;
                 self.fmt_recurse_expr(f, r, next_indent)
             },
+
+            Variable(ident) => writeln!(f, "{:indent$}Variable \"{:?}\"", "", ident, indent=indent),
 
             Int(val) => writeln!(f, "{:indent$}int( {:?} )", "", val, indent=indent),
 

@@ -1,3 +1,5 @@
+use std::fmt::Debug;
+
 #[derive(PartialEq, Eq, Clone, Copy)]
 pub enum DataType {
     Int, // i64
@@ -6,6 +8,12 @@ pub enum DataType {
 
     /// Equivalent to `()` in Rust, not `null` in Java.
     Nil,
+}
+
+impl Debug for DataType {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> Result<(), std::fmt::Error> {
+        write!(f, "{}", self.to_string())
+    }
 }
 
 impl DataType {
@@ -31,6 +39,16 @@ impl DataType {
             Self::Bool => "bool",
             Self::Float => "float",
             Self::Nil => "nil",
+        }
+    }
+
+    pub fn try_primitive_from(dtype: &str) -> Option<Self> {
+        match dtype {
+            "int" => Some(Self::Int),
+            "bool" => Some(Self::Bool),
+            "float" => Some(Self::Float),
+            "nil" => Some(Self::Nil),
+            _ => None,
         }
     }
 }

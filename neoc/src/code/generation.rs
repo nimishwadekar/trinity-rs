@@ -12,13 +12,16 @@ use crate::{
 };
 use neo_util::{Instruction, LinkableByteCode};
 
+use super::symbols::SymbolTable;
+
 //=========================================
 // TYPES
 //=========================================
 
 pub struct ByteCodeGenerator{
     byte_code: LinkableByteCode,
-    //dtype_stack: Vec<DataType>,
+
+    symbols: SymbolTable,
 }
 
 //=========================================
@@ -59,6 +62,18 @@ impl ByteCodeGenerator {
                 });
             },
 
+            Stmt::GlobalDecl { ident, val, .. } => {
+                let offset = self.begin_data_init_code();
+                if offset > u8::MAX as usize { return Err(CompileError::TooManyGlobals) }
+                let offset = offset as u8;
+
+                self.generate_expr_tree_code(val)?;
+                self.push_code(Instruction::StoreGlobal { offset });
+                self.end_data_init_code();
+                
+                self.symbols.add_variable(ident.to_string(), offset);
+            },
+
             Stmt::Nop => (),
         })
     }
@@ -74,6 +89,12 @@ impl ByteCodeGenerator {
                 self.generate_expr_tree_code(l)?;
                 self.generate_expr_tree_code(r)?;
                 self.generate_expr_ArithmeticBinOp(op, dtype)
+            },
+
+            Expr::Variable(ident) => {
+                let offset = self.symbols.get_variable(ident);
+                self.push_code(Instruction::LoadGlobal { offset });
+                Ok(())
             },
 
             Expr::Literal(val) => self.generate_expr_Literal(val),
@@ -145,11 +166,15 @@ impl ByteCodeGenerator {
     fn new() -> Self {
         Self {
             byte_code: LinkableByteCode::new(),
+            symbols: SymbolTable::new(),
         }
     }
 
     fn push_code(&mut self, instr: Instruction) { self.byte_code.push_code(instr) }
 
-    /// Returns the offset the data is at.
-    fn push_constant(&mut self, data: u64) -> usize { self.byte_code.push_constant(data) }
+    /// Returns the offset the constant is at.
+    fn push_constant(&mut self, constant: u64) -> usize { self.byte_code.push_constant(constant) }
+
+    pub fn begin_data_init_code(&mut self) -> usize { self.byte_code.begin_data_init_code() }
+    pub fn end_data_init_code(&mut self) { self.byte_code.end_data_init_code() }
 }

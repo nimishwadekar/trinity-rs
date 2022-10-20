@@ -1,4 +1,6 @@
 #[derive(Debug)]
 pub enum RunTimeError {
-    DivideByZero
+    DivideByZero,
+    StackUnderflow,
+    StackOverflow,
 }

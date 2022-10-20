@@ -1,9 +1,10 @@
 use neo_util::{
-    debug,
     Instruction::{self, *},
     ExecutableByteCode,
 };
-use crate::error::RunTimeError::{self, *};
+use crate::error::RunTimeError;
+
+const STACK_MAX: usize = 1024 * 1024 / 8;
 
 //=========================================
 // TYPES
@@ -45,112 +46,121 @@ impl Vm {
 
     fn run(&mut self, code: &Vec<Instruction>) -> Result<(), RunTimeError> {
         self.pc = 0;
+        
         while self.pc < code.len() {
             match code[self.pc] {
                 iAdd => {
-                    let r = self.pop().transmute_to_i64();
-                    let l = self.pop().transmute_to_i64();
-                    self.push((l + r).transmute_to_u64());
+                    let r = self.pop()?.transmute_to_i64();
+                    let l = self.pop()?.transmute_to_i64();
+                    self.push((l + r).transmute_to_u64())?;
                 },
 
                 iSub => {
-                    let r = self.pop().transmute_to_i64();
-                    let l = self.pop().transmute_to_i64();
-                    self.push((l - r).transmute_to_u64());
+                    let r = self.pop()?.transmute_to_i64();
+                    let l = self.pop()?.transmute_to_i64();
+                    self.push((l - r).transmute_to_u64())?;
                 },
 
                 iMul => {
-                    let r = self.pop().transmute_to_i64();
-                    let l = self.pop().transmute_to_i64();
-                    self.push((l * r).transmute_to_u64());
+                    let r = self.pop()?.transmute_to_i64();
+                    let l = self.pop()?.transmute_to_i64();
+                    self.push((l * r).transmute_to_u64())?;
                 },
 
                 iDiv => {
-                    let r = self.pop().transmute_to_i64();
-                    let l = self.pop().transmute_to_i64();
+                    let r = self.pop()?.transmute_to_i64();
+                    let l = self.pop()?.transmute_to_i64();
                     if r == 0 {
-                        return Err(DivideByZero);
+                        return Err(RunTimeError::DivideByZero);
                     }
-                    self.push((l / r).transmute_to_u64());
+                    self.push((l / r).transmute_to_u64())?;
                 },
 
                 fAdd => {
-                    let r = self.pop().transmute_to_f64();
-                    let l = self.pop().transmute_to_f64();
-                    self.push((l + r).transmute_to_u64());
+                    let r = self.pop()?.transmute_to_f64();
+                    let l = self.pop()?.transmute_to_f64();
+                    self.push((l + r).transmute_to_u64())?;
                 },
 
                 fSub => {
-                    let r = self.pop().transmute_to_f64();
-                    let l = self.pop().transmute_to_f64();
-                    self.push((l - r).transmute_to_u64());
+                    let r = self.pop()?.transmute_to_f64();
+                    let l = self.pop()?.transmute_to_f64();
+                    self.push((l - r).transmute_to_u64())?;
                 },
 
                 fMul => {
-                    let r = self.pop().transmute_to_f64();
-                    let l = self.pop().transmute_to_f64();
-                    self.push((l * r).transmute_to_u64());
+                    let r = self.pop()?.transmute_to_f64();
+                    let l = self.pop()?.transmute_to_f64();
+                    self.push((l * r).transmute_to_u64())?;
                 },
 
                 fDiv => {
-                    let r = self.pop().transmute_to_f64();
-                    let l = self.pop().transmute_to_f64();
-                    self.push((l / r).transmute_to_u64());
+                    let r = self.pop()?.transmute_to_f64();
+                    let l = self.pop()?.transmute_to_f64();
+                    self.push((l / r).transmute_to_u64())?;
                 },
 
                 StoreGlobal { offset } => {
-                    let val = self.pop();
+                    let val = self.pop()?;
                     self.data[offset as usize] = val;
                 },
 
                 LoadGlobal { offset } => {
-                    self.push(self.data[offset as usize]);
+                    self.push(self.data[offset as usize])?;
                 },
 
                 Const { offset } => {
-                    self.push(self.get_constant(offset as usize));
+                    self.push(self.constants[offset as usize])?;
                 },
 
                 iConst_0 => {
-                    self.push(0);
+                    self.push(0)?;
                 },
 
                 iConst_1 => {
-                    self.push(1);
+                    self.push(1)?;
                 },
 
                 Pop => {
-                    self.pop();
+                    self.pop()?;
                 },
 
                 iPrint => {
-                    println!("{}", self.pop().transmute_to_i64());
+                    println!("{}", self.pop()?.transmute_to_i64());
                 },
 
                 bPrint => {
-                    println!("{}", self.pop().transmute_to_bool());
+                    println!("{}", self.pop()?.transmute_to_bool());
                 },
 
                 fPrint => {
-                    println!("{}", self.pop().transmute_to_f64());
+                    println!("{}", self.pop()?.transmute_to_f64());
                 },
 
                 nPrint => {
-                    assert_eq!(self.pop(), 0);
+                    assert_eq!(self.pop()?, 0);
                     println!("nil");
                 },
             };
 
-            //debug!(&self.stack);
+            //dbg!(&self.stack);
             self.pc += 1;
         }
 
         Ok(())
     }
 
-    fn push(&mut self, value: u64) { self.stack.push(value) }
-    fn pop(&mut self) -> u64 { self.stack.pop().unwrap() }
-    fn get_constant(&self, offset: usize) -> u64 { self.constants[offset] }
+    fn push(&mut self, value: u64) -> Result<(), RunTimeError> {
+        if self.stack.len() == STACK_MAX { Err(RunTimeError::StackOverflow) }
+        else { self.stack.push(value); Ok(()) }
+    }
+
+    fn pop(&mut self) -> Result<u64, RunTimeError>  {
+        match self.stack.pop() {
+            Some(val) => Ok(val),
+            None => Err(RunTimeError::StackUnderflow),
+        }
+    }
 }
 
 // Trait for transmute

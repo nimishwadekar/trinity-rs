@@ -1,7 +1,0 @@
-[package]
-name = "neol"
-version = "0.1.0"
-edition = "2021"
-
-[dependencies]
-neo_util = { path = "../neo_util" }

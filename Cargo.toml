@@ -6,7 +6,3 @@ edition = "2021"
 [workspace]
 
 [dependencies]
-neo_util = { path = "neo_util" }
-neoc = { path = "neoc" }
-neol = { path = "neol" }
-trivm = { path = "trivm" }

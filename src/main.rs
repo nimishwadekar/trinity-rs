@@ -1,8 +1,10 @@
 use std::rc::Rc;
 
 use lexer::Lexer;
+use parser::Parser;
 
 mod lexer;
+mod parser;
 
 //======================================================================================
 //          CONSTANTS
@@ -25,7 +27,7 @@ enum OutputStage {
 //          FUNCTIONS
 //======================================================================================
 
-fn parse_arguments() -> OutputStage {
+fn parse_arguments() -> Result<OutputStage, String> {
     let mut args = std::env::args();
     args.next();
     
@@ -34,36 +36,46 @@ fn parse_arguments() -> OutputStage {
             "--lex" => OutputStage::Lex,
             "--parse" => OutputStage::Parse,
             "--code" => OutputStage::Code,
-            arg => panic!("Invalid argument: {}", arg),
+            arg => return Err(format!("Invalid argument `{}`", arg)),
         },
         None => OutputStage::Execute,
     };
     if let Some(..) = args.next() {
-        panic!("Only one argument expected");
+        return Err("Only one argument expected".to_string());
     }
 
-    arg
+    Ok(arg)
+}
+
+fn driver() -> Result<(), String> {
+    let arg = parse_arguments()?;
+
+    let src = match std::fs::read_to_string("test.neo") {
+        Ok(mut src) => {
+            src.push(EOF);
+            Rc::new(src)
+        },
+        Err(e) => return Err(e.to_string()),
+    };
+
+    let lexer = Lexer::new(src.clone());
+
+    if let OutputStage::Lex = arg {
+        lexer.print_tokens();
+        return Ok(());
+    }
+
+    let mut parser = Parser::new(lexer.iter());
+    parser.parse();
+
+    Ok(())
 }
 
 fn main() {
     println!("\n=================================================================================================================\n");
 
-    let arg = parse_arguments();
-
-    let mut src = match std::fs::read_to_string("test.neo") {
-        Ok(src) => src,
-        Err(e) => panic!("File read failed: {}", e),
-    };
-    // Push EOF character.
-    src.push('\0');
-    println!("{:?}\n", src);
-
-    let src = Rc::new(src);
-
-    let lexer = Lexer::new(src.clone());
-    
-    for token in lexer.iter() {
-        println!("{:?}", token);
+    if let Err(e) = driver() {
+        println!("\x1b[91mERROR\x1b[0m: {}", e);
     }
 
     println!("\n=================================================================================================================\n");

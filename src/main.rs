@@ -66,7 +66,8 @@ fn driver() -> Result<(), String> {
     }
 
     let mut parser = Parser::new(lexer.iter());
-    parser.parse();
+    let tree = parser.parse()?;
+    println!("{}", tree);
 
     Ok(())
 }

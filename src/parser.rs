@@ -5,6 +5,13 @@ use crate::lexer::{TokenStream, Token, TokenType};
 //======================================================================================
 
 
+
+//======================================================================================
+//          MACROS
+//======================================================================================
+
+
+
 //======================================================================================
 //          STRUCTURES
 //======================================================================================
@@ -62,8 +69,18 @@ enum ExprOperator {
 
 #[derive(Debug)]
 enum Expr {
-    ExprOperation{ operator: ExprOperator, operands: Vec<Box<Expr>> },
+    Operation{ operator: ExprOperator, operands: Vec<Box<Expr>> },
     IntegerLiteral(i32),
+}
+
+#[derive(Debug)]
+enum Stmt {
+    Expr(Box<Expr>),
+    Print(Box<Expr>),
+}
+
+pub struct SyntaxTree {
+    stmts: Vec<Box<Stmt>>,
 }
 
 pub struct Parser<'a> {
@@ -73,6 +90,21 @@ pub struct Parser<'a> {
 //======================================================================================
 //          STANDARD LIBRARY TRAIT IMPLEMENTATIONS
 //======================================================================================
+
+impl std::fmt::Display for SyntaxTree {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        for stmt in self.stmts.iter() {
+            writeln!(f, "{}", stmt)?;
+        }
+        Ok(())
+    }
+}
+
+impl std::fmt::Display for Stmt {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        self.display_format(f, 0)
+    }
+}
 
 impl std::fmt::Display for Expr {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -91,21 +123,54 @@ impl<'a> Parser<'a> {
         }
     }
 
-    pub fn parse(&mut self) {
-        let expr = self.parse_program();
-        match expr {
-            Ok(expr) => println!("{}", expr),
-            Err(e) => println!("{}", e),
-        }
+    pub fn parse(&mut self)-> Result<SyntaxTree, String> {
+        Ok(SyntaxTree { stmts: self.parse_program()? })
     }
 
-    fn parse_program(&mut self) -> Result<Box<Expr>, String> {
-        match self.peek_token()?.ok_or("Temp error: EOP".to_string())? {
-            t if t.token().is_expr_starter() => self.parse_expr(),
-            _ => Err("non-expression-starter".to_string()),
+    fn parse_program(&mut self) -> Result<Vec<Box<Stmt>>, String> {
+        let mut stmts = Vec::new();
+        loop {
+            let stmt = match self.peek_token()? {
+                None => break,
+                Some(token) => match token.token() {
+                    // Print statement.
+                    TokenType::Print => self.parse_print_stmt()?,
+
+                    // Expression statement.
+                    t if t.is_expr_starter() => self.parse_expr_stmt()?,
+
+                    // Empty statement.
+                    TokenType::Semicolon => {
+                        self.next_token().unwrap();
+                        continue;
+                    },
+
+                    _ => return Err(err_format("Invalid start of statement", token)),
+                }
+            };
+            stmts.push(stmt);
         }
+        Ok(stmts)
     }
 
+    /// PrintStmt := `print` Expr `;`
+    fn parse_print_stmt(&mut self) -> Result<Box<Stmt>, String> {
+        self.consume_token(TokenType::Print)?;
+        let expr = self.parse_expr()?;
+        self.consume_token(TokenType::Semicolon)?;
+        Ok(Box::new(Stmt::Print(expr)))
+    }
+
+    /// ExprStmt := Expr `;`
+    fn parse_expr_stmt(&mut self) -> Result<Box<Stmt>, String> {
+        let expr = self.parse_expr()?;
+        self.consume_token(TokenType::Semicolon)?;
+        Ok(Box::new(Stmt::Expr(expr)))
+    }
+
+    /// Expr := Expr (`+`) Expr \
+    /// Expr := (`+`) Expr \
+    /// Expr := `(` Expr `)`
     fn parse_expr(&mut self) -> Result<Box<Expr>, String> {
         self.parse_expr_recursive(OperatorPrecedence::None as u8)
     }
@@ -130,7 +195,7 @@ impl<'a> Parser<'a> {
                 let op = unsafe { t.as_prefix_operator().unwrap_unchecked() };
                 let ((), rbp) = op.prefix_binding_power();
                 let rhs = self.parse_expr_recursive(rbp)?;
-                Box::new(Expr::ExprOperation { operator: op, operands: vec![rhs] })
+                Box::new(Expr::Operation { operator: op, operands: vec![rhs] })
             },
 
             _ => return Err(err_format("Expected expression", tok)),
@@ -155,9 +220,9 @@ impl<'a> Parser<'a> {
                 lhs = if let ExprOperator::Subscript = op {
                     let rhs = self.parse_expr_recursive(0)?;
                     self.consume_token(TokenType::RSquare)?;
-                    Box::new(Expr::ExprOperation { operator: op, operands: vec![lhs, rhs] })
+                    Box::new(Expr::Operation { operator: op, operands: vec![lhs, rhs] })
                 } else {
-                    Box::new(Expr::ExprOperation { operator: op, operands: vec![lhs] })
+                    Box::new(Expr::Operation { operator: op, operands: vec![lhs] })
                 };
                 continue;
             }
@@ -169,7 +234,7 @@ impl<'a> Parser<'a> {
                 self.next_token().unwrap_or_else(|_| unreachable!());
     
                 let rhs = self.parse_expr_recursive(rbp)?;
-                lhs = Box::new(Expr::ExprOperation { operator: op, operands: vec![lhs, rhs] });
+                lhs = Box::new(Expr::Operation { operator: op, operands: vec![lhs, rhs] });
                 continue;
             }
             
@@ -265,7 +330,8 @@ impl<'a> Parser<'a> {
     /// Returns an `Err` if `EOF` was encountered.
     #[inline]
     fn expect_token(&mut self) -> Result<Token, String> {
-        match self.tokens.next().ok_or("Unexpected EOF".to_string())? {
+        let t = self.tokens.next();
+        match self.handle_eof_token(t)? {
             t => match t.token() {
                 TokenType::Error(..) => Err(err_format("Unknown character", t)),
                 _ => Ok(t),
@@ -275,12 +341,21 @@ impl<'a> Parser<'a> {
 
     #[inline]
     fn consume_token(&mut self, expected: TokenType) -> Result<(), String> {
-        let t = self.tokens.next().ok_or("Unexpected EOF".to_string())?;
-        match t.token() {
-            TokenType::Error(..) => Err(err_format("Unknown character", t)),
+        let location = self.tokens.location();
+        let token = match self.tokens.next() {
+            None => return Err(format!("<{}> Expected `{}`, reached end of file", location, expected)),
+            Some(t) => t,
+        };
+        match token.token() {
+            TokenType::Error(..) => Err(err_format("Unknown character", token)),
             t if t == &expected => Ok(()),
-            t => Err(format!("Expected `{}`, found `{}`", expected, t)),
+            t => Err(format!("<{}> Expected `{}`, found `{}`", token.lexeme().location(), expected, t)),
         }
+    }
+
+    #[inline(always)]
+    fn handle_eof_token(&self, token: Option<Token>) -> Result<Token, String> {
+        token.ok_or(format!("<{}> Unexpected end of file", self.tokens.location()))
     }
 }
 
@@ -288,20 +363,38 @@ impl<'a> Parser<'a> {
 //          FORMAT METHODS
 //=======================================
 
-impl Expr {
+const NEXT_INDENT: usize = 3;
+
+impl Stmt {
     fn display_format(&self, f: &mut std::fmt::Formatter<'_>, indent: usize) -> std::fmt::Result {
-        const NEXT_INDENT: usize = 3;
         write!(f, "{:indent$}", "")?;
         match self {
-            Expr::IntegerLiteral(value) => writeln!(f, "Integer {}", value),
-            Expr::ExprOperation { operator, operands } => {
+            Stmt::Expr(expr) => {
+                writeln!(f, "ExprStmt")?;
+                expr.display_format(f, indent + NEXT_INDENT)?;
+            },
+            Stmt::Print(expr) => {
+                writeln!(f, "PrintStmt")?;
+                expr.display_format(f, indent + NEXT_INDENT)?;
+            },
+        };
+        Ok(())
+    }
+}
+
+impl Expr {
+    fn display_format(&self, f: &mut std::fmt::Formatter<'_>, indent: usize) -> std::fmt::Result {
+        write!(f, "{:indent$}", "")?;
+        match self {
+            Expr::IntegerLiteral(value) => writeln!(f, "Integer {}", value)?,
+            Expr::Operation { operator, operands } => {
                 writeln!(f, "{:?}", operator)?;
                 for operand in operands {
                     operand.display_format(f, indent + NEXT_INDENT)?;
                 };
-                Ok(())
             },
-        }
+        };
+        Ok(())
     }
 }
 

@@ -26,6 +26,10 @@ pub enum TokenType {
 
     LParen, RParen,
     LSquare, RSquare,
+    Semicolon,
+
+    // Temp.
+    Print,
 
     Error(char),
 }
@@ -74,15 +78,17 @@ impl std::fmt::Display for TokenType {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             TokenType::IntegerLiteral(value) => write!(f, "Int {}", value),
-
+            TokenType::Error(ch) => write!(f, "Error '{}'", ch),
+            
             TokenType::Plus => write!(f, "+"),
 
             TokenType::LParen => write!(f, "("),
             TokenType::RParen => write!(f, ")"),
             TokenType::LSquare => write!(f, "["),
             TokenType::RSquare => write!(f, "]"),
+            TokenType::Semicolon => write!(f, ";"),
 
-            TokenType::Error(ch) => write!(f, "Error '{}'", ch),
+            TokenType::Print => write!(f, "print"),
         }
     }
 }
@@ -102,12 +108,19 @@ impl<'a> TokenStream<'a> {
         self.current.clone()
     }
 
+    pub fn location(&self) -> String {
+        self.lexeme(0).location()
+    }
+
     fn lex(&mut self) -> Option<Token> {
         self.skip_whitespaces();
         let peek = self.peek_char()?;
 
         let token = if peek.is_alphabetic() {
-            todo!("identifiers");
+            match self.lex_keyword() {
+                Some(t) => t,
+                None => todo!("identifiers"),
+            }
         }
         else if peek.is_digit(10) {
             self.lex_integer_literal()
@@ -117,6 +130,27 @@ impl<'a> TokenStream<'a> {
             self.lex_single_special_character()
         };
         Some(token)
+    }
+
+    fn lex_keyword(&mut self) -> Option<Token> {
+        static KEYWORDS: [(&str, TokenType); 1] = [
+            ("print", TokenType::Print),
+        ];
+
+        for (lexeme, ttype) in KEYWORDS.iter() {
+            let bytes = self.str().as_bytes();
+            if bytes.len() < lexeme.len() {
+                continue;
+            }
+            if &unsafe { from_utf8_unchecked(&bytes[..lexeme.len()]) } == lexeme {
+                let length = lexeme.len();
+                let lexeme = self.lexeme(length);
+                self.advance(length);
+                return Some(Token::new(ttype.clone(), lexeme));
+            }
+        }
+
+        None
     }
 
     fn lex_integer_literal(&mut self) -> Token {
@@ -141,10 +175,14 @@ impl<'a> TokenStream<'a> {
 
         let token = match c {
             '+' => TokenType::Plus,
+
             '(' => TokenType::LParen,
             ')' => TokenType::RParen,
             '[' => TokenType::LSquare,
             ']' => TokenType::RSquare,
+
+            ';' => TokenType::Semicolon,
+
             c => TokenType::Error(c),
         };
         Token::new(token, lexeme)

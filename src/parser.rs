@@ -61,25 +61,25 @@ enum OperatorPrecedence {
 }
 
 #[derive(Debug, Clone, Copy)]
-enum ExprOperator {
+pub enum ExprOperator {
     Add,
     UnaryPlus,
     Subscript,
 }
 
 #[derive(Debug)]
-enum Expr {
+pub enum Expr {
     Operation{ operator: ExprOperator, operands: Vec<Box<Expr>> },
     IntegerLiteral(i32),
 }
 
 #[derive(Debug)]
-enum Stmt {
+pub enum Stmt {
     Expr(Box<Expr>),
     Print(Box<Expr>),
 }
 
-pub struct SyntaxTree {
+pub struct ParsedProgram {
     stmts: Vec<Box<Stmt>>,
 }
 
@@ -91,7 +91,7 @@ pub struct Parser<'a> {
 //          STANDARD LIBRARY TRAIT IMPLEMENTATIONS
 //======================================================================================
 
-impl std::fmt::Display for SyntaxTree {
+impl std::fmt::Display for ParsedProgram {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         for stmt in self.stmts.iter() {
             writeln!(f, "{}", stmt)?;
@@ -123,8 +123,8 @@ impl<'a> Parser<'a> {
         }
     }
 
-    pub fn parse(&mut self)-> Result<SyntaxTree, String> {
-        Ok(SyntaxTree { stmts: self.parse_program()? })
+    pub fn parse(&mut self)-> Result<ParsedProgram, String> {
+        Ok(ParsedProgram { stmts: self.parse_program()? })
     }
 
     fn parse_program(&mut self) -> Result<Vec<Box<Stmt>>, String> {
@@ -173,6 +173,12 @@ impl<'a> Parser<'a> {
     /// Expr := `(` Expr `)`
     fn parse_expr(&mut self) -> Result<Box<Expr>, String> {
         self.parse_expr_recursive(OperatorPrecedence::None as u8)
+    }
+}
+
+impl ParsedProgram {
+    pub fn stmts(&self) -> &Vec<Box<Stmt>> {
+        &self.stmts
     }
 }
 

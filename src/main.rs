@@ -1,10 +1,13 @@
 use std::rc::Rc;
 
+use codegen::CodeGenerator;
 use lexer::Lexer;
 use parser::Parser;
 
 mod lexer;
 mod parser;
+mod bytecode;
+mod codegen;
 
 //======================================================================================
 //          CONSTANTS
@@ -66,8 +69,14 @@ fn driver() -> Result<(), String> {
     }
 
     let mut parser = Parser::new(lexer.iter());
-    let tree = parser.parse()?;
-    println!("{}", tree);
+    let parsed_program = parser.parse()?;
+    if let OutputStage::Parse = arg {
+        println!("{}", parsed_program);
+        return Ok(());
+    }
+    
+    let code = CodeGenerator::generate(parsed_program)?;
+    println!("{}", code);
 
     Ok(())
 }

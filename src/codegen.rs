@@ -1,7 +1,7 @@
 use crate::{
     parser::{
         ParsedProgram,
-        Stmt, Expr, ExprOperator,
+        Stmt, Expr,
     },
     bytecode::{ByteCode, Instruction},
 };
@@ -70,17 +70,16 @@ impl CodeGenerator {
                 let index = self.code.add_constant(*value)?;
                 self.code.write_instruction(Instruction::LoadConstant { index });
             },
-            // Modify tree so that this is handled before this.
-            Expr::Operation { operator, operands } => {
-                match operator {
-                    ExprOperator::Add => {
-                        self.generate_expr(&operands[0])?;
-                        self.generate_expr(&operands[1])?;
-                        self.code.write_instruction(Instruction::Add);
-                    }
-                    o => todo!("{:?}", o),
-                }
+
+            Expr::Positive(expr) => {
+                self.generate_expr(expr)?;
             },
+
+            Expr::Add { l, r } => {
+                self.generate_expr(l)?;
+                self.generate_expr(r)?;
+                self.code.write_instruction(Instruction::Add);
+            }
         };
         Ok(())
     }

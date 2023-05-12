@@ -61,7 +61,7 @@ enum OperatorPrecedence {
 }
 
 #[derive(Debug, Clone, Copy)]
-pub enum ExprOperator {
+enum ExprOperator {
     Add,
     UnaryPlus,
     Subscript,
@@ -69,8 +69,15 @@ pub enum ExprOperator {
 
 #[derive(Debug)]
 pub enum Expr {
-    Operation{ operator: ExprOperator, operands: Vec<Box<Expr>> },
     IntegerLiteral(i32),
+
+    // Unary Operations.
+    Positive(Box<Expr>),
+
+    // Binary Operations.
+    Add{ l: Box<Expr>, r: Box<Expr> },
+
+    // Ternary Operations.
 }
 
 #[derive(Debug)]
@@ -201,7 +208,7 @@ impl<'a> Parser<'a> {
                 let op = unsafe { t.as_prefix_operator().unwrap_unchecked() };
                 let ((), rbp) = op.prefix_binding_power();
                 let rhs = self.parse_expr_recursive(rbp)?;
-                Box::new(Expr::Operation { operator: op, operands: vec![rhs] })
+                Box::new(Expr::new(op, vec![rhs]))
             },
 
             _ => return Err(err_format("Expected expression", tok)),
@@ -226,9 +233,9 @@ impl<'a> Parser<'a> {
                 lhs = if let ExprOperator::Subscript = op {
                     let rhs = self.parse_expr_recursive(0)?;
                     self.consume_token(TokenType::RSquare)?;
-                    Box::new(Expr::Operation { operator: op, operands: vec![lhs, rhs] })
+                    Box::new(Expr::new(op, vec![lhs, rhs]))
                 } else {
-                    Box::new(Expr::Operation { operator: op, operands: vec![lhs] })
+                    Box::new(Expr::new(op, vec![lhs]))
                 };
                 continue;
             }
@@ -240,7 +247,7 @@ impl<'a> Parser<'a> {
                 self.next_token().unwrap_or_else(|_| unreachable!());
     
                 let rhs = self.parse_expr_recursive(rbp)?;
-                lhs = Box::new(Expr::Operation { operator: op, operands: vec![lhs, rhs] });
+                lhs = Box::new(Expr::new(op, vec![lhs, rhs]));
                 continue;
             }
             
@@ -302,6 +309,35 @@ impl TokenType {
         match self {
             TokenType::Plus => Some(ExprOperator::UnaryPlus),
             _ => None,
+        }
+    }
+}
+
+impl Expr {
+    fn new(operator: ExprOperator, operands: Vec<Box<Expr>>) -> Self {
+        let operand_count = operands.len();
+        let mut operands = operands.into_iter();
+        let msg = format!("`{operator:?}` with {operand_count} operand{}", if operand_count == 1 {""} else {"s"});
+
+        match operator {
+            // Unary
+            ExprOperator::UnaryPlus => {
+                assert_eq!(operand_count, 1, "{}", msg);
+                let expr = unsafe { operands.next().unwrap_unchecked() };
+                Expr::Positive(expr)
+            },
+
+            // Binary
+            ExprOperator::Add => {
+                assert_eq!(operand_count, 2, "{}", msg);
+                let l = unsafe { operands.next().unwrap_unchecked() };
+                let r = unsafe { operands.next().unwrap_unchecked() };
+                Expr::Add{ l, r }
+            },
+            ExprOperator::Subscript => {
+                assert_eq!(operand_count, 2, "{}", msg);
+                todo!("subscript expression")
+            },
         }
     }
 }
@@ -374,14 +410,15 @@ const NEXT_INDENT: usize = 3;
 impl Stmt {
     fn display_format(&self, f: &mut std::fmt::Formatter<'_>, indent: usize) -> std::fmt::Result {
         write!(f, "{:indent$}", "")?;
+        let indent = indent + NEXT_INDENT;
         match self {
             Stmt::Expr(expr) => {
                 writeln!(f, "ExprStmt")?;
-                expr.display_format(f, indent + NEXT_INDENT)?;
+                expr.display_format(f, indent)?;
             },
             Stmt::Print(expr) => {
                 writeln!(f, "PrintStmt")?;
-                expr.display_format(f, indent + NEXT_INDENT)?;
+                expr.display_format(f, indent)?;
             },
         };
         Ok(())
@@ -391,13 +428,17 @@ impl Stmt {
 impl Expr {
     fn display_format(&self, f: &mut std::fmt::Formatter<'_>, indent: usize) -> std::fmt::Result {
         write!(f, "{:indent$}", "")?;
+        let indent = indent + NEXT_INDENT;
         match self {
             Expr::IntegerLiteral(value) => writeln!(f, "Integer {}", value)?,
-            Expr::Operation { operator, operands } => {
-                writeln!(f, "{:?}", operator)?;
-                for operand in operands {
-                    operand.display_format(f, indent + NEXT_INDENT)?;
-                };
+            Expr::Positive(expr) => {
+                writeln!(f, "Positive")?;
+                expr.display_format(f, indent)?;
+            },
+            Expr::Add { l, r } => {
+                writeln!(f, "Add")?;
+                l.display_format(f, indent)?;
+                r.display_format(f, indent)?;
             },
         };
         Ok(())

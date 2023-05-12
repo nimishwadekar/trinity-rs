@@ -76,6 +76,10 @@ fn driver() -> Result<(), String> {
     }
     
     let code = CodeGenerator::generate(parsed_program)?;
+    if let OutputStage::Code = arg {
+        println!("{}", code);
+        return Ok(());
+    }
     println!("{}", code);
 
     Ok(())

@@ -3,11 +3,13 @@ use std::rc::Rc;
 use codegen::CodeGenerator;
 use lexer::Lexer;
 use parser::Parser;
+use vm::TrinityVM;
 
 mod lexer;
 mod parser;
 mod bytecode;
 mod codegen;
+mod vm;
 
 //======================================================================================
 //          CONSTANTS
@@ -23,6 +25,7 @@ enum OutputStage {
     Lex,
     Parse,
     Code,
+    ExecuteTrace,
     Execute,
 }
 
@@ -39,6 +42,8 @@ fn parse_arguments() -> Result<OutputStage, String> {
             "--lex" => OutputStage::Lex,
             "--parse" => OutputStage::Parse,
             "--code" => OutputStage::Code,
+            "--trace" => OutputStage::ExecuteTrace,
+            "--execute" => OutputStage::Execute,
             arg => return Err(format!("Invalid argument `{}`", arg)),
         },
         None => OutputStage::Execute,
@@ -50,8 +55,21 @@ fn parse_arguments() -> Result<OutputStage, String> {
     Ok(arg)
 }
 
+fn usage() -> &'static str {
+    "Usage:
+    Arguments:
+    <none> or `--execute` - Executes the program normally.
+    `--lex` - Displays the tokenised version of the source code.
+    `--parse` - Displays the syntax tree created after parsing.
+    `--code` - Displays the byte code generated.
+    `--trace` - Executes the program but displays every byte code instruction as it executes."
+}
+
 fn driver() -> Result<(), String> {
-    let arg = parse_arguments()?;
+    let arg = match parse_arguments() {
+        Ok(arg) => arg,
+        Err(e) => return Err(format!("{}\n\n{}", e, usage())),
+    };
 
     let src = match std::fs::read_to_string("test.neo") {
         Ok(mut src) => {
@@ -80,7 +98,10 @@ fn driver() -> Result<(), String> {
         println!("{}", code);
         return Ok(());
     }
-    println!("{}", code);
+
+    let trace = if let OutputStage::ExecuteTrace = arg { true } else { false };
+    
+    TrinityVM::execute(code, trace)?;
 
     Ok(())
 }

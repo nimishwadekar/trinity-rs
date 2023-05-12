@@ -22,19 +22,21 @@ pub enum Instruction {
     Add,
     Pop,
     Print,
+
+    End,
 }
 
 #[derive(Debug)]
-struct Constants {
+pub struct Constants {
     pool: HashMap<i32, u8>,
 }
 
 #[derive(Debug)]
 pub struct ByteCode {
-    code: Vec<Instruction>,
+    pub code: Vec<Instruction>,
 
     /// constant -> index.
-    constants: Constants,
+    pub constants: Constants,
 }
 
 //======================================================================================
@@ -48,6 +50,7 @@ impl std::fmt::Display for Instruction {
             Instruction::Add => write!(f, "Add"),
             Instruction::Pop => write!(f, "Pop"),
             Instruction::Print => write!(f, "Print"),
+            Instruction::End => write!(f, "End"),
         }
     }
 }
@@ -107,7 +110,7 @@ impl Constants {
         }
     }
 
-    fn to_vec(&self) -> Vec<i32> {
+    pub fn to_vec(&self) -> Vec<i32> {
         let mut vec = vec![0; self.pool.len()];
         for (&constant, &index) in self.pool.iter() {
             vec[index as usize] = constant;

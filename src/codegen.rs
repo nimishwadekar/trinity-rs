@@ -47,6 +47,7 @@ impl CodeGenerator {
         for stmt in parsed_program.stmts() {
             self.generate_stmt(stmt)?;
         }
+        self.code.write_instruction(Instruction::End);
         Ok(())
     }
 

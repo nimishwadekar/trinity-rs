@@ -86,8 +86,7 @@ fn driver() -> Result<(), String> {
         return Ok(());
     }
 
-    let mut parser = Parser::new(lexer.iter());
-    let parsed_program = parser.parse()?;
+    let parsed_program = Parser::parse(lexer.iter())?;
     if let OutputStage::Parse = arg {
         println!("{}", parsed_program);
         return Ok(());

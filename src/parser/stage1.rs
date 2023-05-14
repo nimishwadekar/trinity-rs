@@ -86,11 +86,11 @@ pub enum Stmt {
     Print(Box<Expr>),
 }
 
-pub struct ParsedProgram {
+pub struct Stage1Tree {
     stmts: Vec<Box<Stmt>>,
 }
 
-pub struct Parser<'a> {
+pub struct Stage1Parser<'a> {
     tokens: TokenStream<'a>,
 }
 
@@ -98,7 +98,7 @@ pub struct Parser<'a> {
 //          STANDARD LIBRARY TRAIT IMPLEMENTATIONS
 //======================================================================================
 
-impl std::fmt::Display for ParsedProgram {
+impl std::fmt::Display for Stage1Tree {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         for stmt in self.stmts.iter() {
             writeln!(f, "{}", stmt)?;
@@ -123,15 +123,15 @@ impl std::fmt::Display for Expr {
 //          IMPLEMENTATIONS
 //======================================================================================
 
-impl<'a> Parser<'a> {
+impl<'a> Stage1Parser<'a> {
     pub fn new(tokens: TokenStream<'a>) -> Self {
         Self {
             tokens,
         }
     }
 
-    pub fn parse(&mut self)-> Result<ParsedProgram, String> {
-        Ok(ParsedProgram { stmts: self.parse_program()? })
+    pub fn parse(&mut self)-> Result<Stage1Tree, String> {
+        Ok(Stage1Tree { stmts: self.parse_program()? })
     }
 
     fn parse_program(&mut self) -> Result<Vec<Box<Stmt>>, String> {
@@ -183,7 +183,7 @@ impl<'a> Parser<'a> {
     }
 }
 
-impl ParsedProgram {
+impl Stage1Tree {
     pub fn stmts(&self) -> &Vec<Box<Stmt>> {
         &self.stmts
     }
@@ -193,7 +193,7 @@ impl ParsedProgram {
 //          EXPR PARSING METHODS
 //=======================================
 
-impl<'a> Parser<'a> {
+impl<'a> Stage1Parser<'a> {
     fn parse_expr_recursive(&mut self, min_bp: u8) -> Result<Box<Expr>, String> {
         // Assumes first token of expression has been validated.
         let tok = self.expect_token()?;
@@ -346,7 +346,7 @@ impl Expr {
 //          HELPER METHODS
 //=======================================
 
-impl<'a> Parser<'a> {
+impl<'a> Stage1Parser<'a> {
     #[inline]
     fn peek_token(&mut self) -> Result<Option<Token>, String> {
         match self.tokens.peek() {

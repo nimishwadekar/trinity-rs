@@ -1,6 +1,6 @@
 use crate::{
-    parser::{
-        ParsedProgram,
+    parser::stage1::{
+        Stage1Tree,
         Stmt, Expr,
     },
     bytecode::{ByteCode, Instruction},
@@ -37,13 +37,13 @@ pub struct CodeGenerator {
 //======================================================================================
 
 impl CodeGenerator {
-    pub fn generate(parsed_program: ParsedProgram) -> Result<ByteCode, String> {
+    pub fn generate(parsed_program: Stage1Tree) -> Result<ByteCode, String> {
         let mut codegen = CodeGenerator { code: ByteCode::new() };
         codegen.generate_program(parsed_program)?;
         Ok(codegen.code)
     }
 
-    fn generate_program(&mut self, parsed_program: ParsedProgram) -> Result<(), String> {
+    fn generate_program(&mut self, parsed_program: Stage1Tree) -> Result<(), String> {
         for stmt in parsed_program.stmts() {
             self.generate_stmt(stmt)?;
         }

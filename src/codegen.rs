@@ -6,6 +6,8 @@ use crate::{
     bytecode::{ByteCode, Instruction},
 };
 
+type ParseTree = Stage1Tree;
+
 //======================================================================================
 //          CONSTANTS
 //======================================================================================
@@ -37,15 +39,15 @@ pub struct CodeGenerator {
 //======================================================================================
 
 impl CodeGenerator {
-    pub fn generate(parsed_program: Stage1Tree) -> Result<ByteCode, String> {
+    pub fn generate(parsed_program: ParseTree) -> Result<ByteCode, String> {
         let mut codegen = CodeGenerator { code: ByteCode::new() };
         codegen.generate_program(parsed_program)?;
         Ok(codegen.code)
     }
 
-    fn generate_program(&mut self, parsed_program: Stage1Tree) -> Result<(), String> {
+    fn generate_program(&mut self, parsed_program: ParseTree) -> Result<(), String> {
         for stmt in parsed_program.stmts() {
-            self.generate_stmt(stmt)?;
+            self.generate_stmt(&stmt.stmt)?;
         }
         self.code.write_instruction(Instruction::End);
         Ok(())
@@ -54,11 +56,11 @@ impl CodeGenerator {
     fn generate_stmt(&mut self, stmt: &Stmt) -> Result<(), String> {
         match stmt {
             Stmt::Expr(expr) => {
-                self.generate_expr(expr)?;
+                self.generate_expr(&expr.expr)?;
                 self.code.write_instruction(Instruction::Pop);
             },
             Stmt::Print(expr) => {
-                self.generate_expr(expr)?;
+                self.generate_expr(&expr.expr)?;
                 self.code.write_instruction(Instruction::Print);
             }
         };
@@ -73,12 +75,12 @@ impl CodeGenerator {
             },
 
             Expr::Positive(expr) => {
-                self.generate_expr(expr)?;
+                self.generate_expr(&expr.expr)?;
             },
 
             Expr::Add { l, r } => {
-                self.generate_expr(l)?;
-                self.generate_expr(r)?;
+                self.generate_expr(&l.expr)?;
+                self.generate_expr(&r.expr)?;
                 self.code.write_instruction(Instruction::Add);
             }
         };

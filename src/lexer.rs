@@ -99,6 +99,24 @@ impl std::fmt::Display for Lexeme {
     }
 }
 
+impl std::ops::Add for Lexeme {
+    type Output = Lexeme;
+
+    /// Panics
+    fn add(self, rhs: Self) -> Self::Output {
+        let Lexeme { src, offset, line, column, .. } = self;
+        if offset > rhs.offset { panic!("LHS of Lexeme addition needs to be earlier than the RHS in the source."); }
+
+        Lexeme {
+            src,
+            offset,
+            length: rhs.offset + rhs.length - offset,
+            line,
+            column,
+        }
+    }
+}
+
 //======================================================================================
 //          IMPLEMENTATIONS
 //======================================================================================

@@ -1,5 +1,7 @@
 use std::collections::{HashMap, hash_map::Entry};
 
+use crate::CompilerResult;
+
 //======================================================================================
 //          CONSTANTS
 //======================================================================================
@@ -118,7 +120,7 @@ impl Constants {
         vec
     }
 
-    fn add_constant(&mut self, constant: i32) -> Result<u8, String> {
+    fn add_constant(&mut self, constant: i32) -> CompilerResult<u8> {
         let constant_count = self.pool.len();
         match self.pool.entry(constant) {
             Entry::Occupied(e) => Ok(*e.get()),

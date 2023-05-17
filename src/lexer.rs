@@ -6,10 +6,18 @@ use std::{
 use crate::EOF;
 
 //======================================================================================
+//          CONSTANTS
+//======================================================================================
+
+const KEYWORDS: [(&str, TokenType); 1] = [
+    ("print", TokenType::Print),
+];
+
+//======================================================================================
 //          STRUCTURES
 //======================================================================================
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Eq)]
 pub struct Lexeme {
     src: Rc<String>,
     offset: usize,
@@ -20,7 +28,7 @@ pub struct Lexeme {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum TokenType {
-    IntegerLiteral(i32),
+    IntegerLiteral(Lexeme),
 
     Plus,
 
@@ -93,6 +101,14 @@ impl std::fmt::Display for TokenType {
     }
 }
 
+/* impl std::ops::Deref for Lexeme {
+    type Target = str;
+
+    fn deref(&self) -> &Self::Target {
+        unsafe { from_utf8_unchecked(&self.src.as_bytes()[self.offset..]) }
+    }
+} */
+
 impl std::fmt::Display for Lexeme {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}", self.as_str())
@@ -114,6 +130,12 @@ impl std::ops::Add for Lexeme {
             line,
             column,
         }
+    }
+}
+
+impl PartialEq for Lexeme {
+    fn eq(&self, other: &Self) -> bool {
+        self.as_str() == other.as_str()
     }
 }
 
@@ -151,10 +173,6 @@ impl<'a> TokenStream<'a> {
     }
 
     fn lex_keyword(&mut self) -> Option<Token> {
-        static KEYWORDS: [(&str, TokenType); 1] = [
-            ("print", TokenType::Print),
-        ];
-
         for (lexeme, ttype) in KEYWORDS.iter() {
             let bytes = self.str().as_bytes();
             if bytes.len() < lexeme.len() {
@@ -176,8 +194,7 @@ impl<'a> TokenStream<'a> {
             if !c.is_digit(10) {
                 let lexeme = self.lexeme(length);
                 self.advance(length);
-                let value = lexeme.as_str().parse().unwrap_or_else(|_| unreachable!("lex_integer_literal()"));
-                let token = TokenType::IntegerLiteral(value);
+                let token = TokenType::IntegerLiteral(lexeme.clone());
                 return Token::new(token, lexeme);
             }
         }

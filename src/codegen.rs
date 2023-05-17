@@ -1,12 +1,8 @@
 use crate::{
-    parser::stage1::{
-        Stage1Tree,
-        Stmt, Expr,
-    },
+    parser::{ParseTree, Expr, ExprType, Stmt, StmtType},
     bytecode::{ByteCode, Instruction},
+    CompilerResult,
 };
-
-type ParseTree = Stage1Tree;
 
 //======================================================================================
 //          CONSTANTS
@@ -39,48 +35,48 @@ pub struct CodeGenerator {
 //======================================================================================
 
 impl CodeGenerator {
-    pub fn generate(parsed_program: ParseTree) -> Result<ByteCode, String> {
+    pub fn generate(parsed_program: ParseTree) -> CompilerResult<ByteCode> {
         let mut codegen = CodeGenerator { code: ByteCode::new() };
         codegen.generate_program(parsed_program)?;
         Ok(codegen.code)
     }
 
-    fn generate_program(&mut self, parsed_program: ParseTree) -> Result<(), String> {
+    fn generate_program(&mut self, parsed_program: ParseTree) -> CompilerResult<()> {
         for stmt in parsed_program.stmts() {
-            self.generate_stmt(&stmt.stmt)?;
+            self.generate_stmt(stmt)?;
         }
         self.code.write_instruction(Instruction::End);
         Ok(())
     }
 
-    fn generate_stmt(&mut self, stmt: &Stmt) -> Result<(), String> {
-        match stmt {
-            Stmt::Expr(expr) => {
-                self.generate_expr(&expr.expr)?;
+    fn generate_stmt(&mut self, stmt: &Stmt) -> CompilerResult<()> {
+        match stmt.stmt() {
+            StmtType::Expr(expr) => {
+                self.generate_expr(expr)?;
                 self.code.write_instruction(Instruction::Pop);
             },
-            Stmt::Print(expr) => {
-                self.generate_expr(&expr.expr)?;
+            StmtType::Print(expr) => {
+                self.generate_expr(expr)?;
                 self.code.write_instruction(Instruction::Print);
             }
         };
         Ok(())
     }
 
-    fn generate_expr(&mut self, expr: &Expr) -> Result<(), String> {
-        match expr {
-            Expr::IntegerLiteral(value) => {
-                let index = self.code.add_constant(*value)?;
+    fn generate_expr(&mut self, expr: &Expr) -> CompilerResult<()> {
+        match expr.expr() {
+            ExprType::IntegerLiteral(value) => {
+                let index = self.code.add_constant(value.as_str().parse::<i32>().unwrap())?;
                 self.code.write_instruction(Instruction::LoadConstant { index });
             },
 
-            Expr::Positive(expr) => {
-                self.generate_expr(&expr.expr)?;
+            ExprType::Positive(expr) => {
+                self.generate_expr(expr)?;
             },
 
-            Expr::Add { l, r } => {
-                self.generate_expr(&l.expr)?;
-                self.generate_expr(&r.expr)?;
+            ExprType::Add { l, r } => {
+                self.generate_expr(l)?;
+                self.generate_expr(r)?;
                 self.code.write_instruction(Instruction::Add);
             }
         };

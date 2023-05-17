@@ -11,6 +11,8 @@ mod bytecode;
 mod codegen;
 mod vm;
 
+pub type CompilerResult<T> = Result<T, String>;
+
 //======================================================================================
 //          CONSTANTS
 //======================================================================================
@@ -33,7 +35,7 @@ enum OutputStage {
 //          FUNCTIONS
 //======================================================================================
 
-fn parse_arguments() -> Result<OutputStage, String> {
+fn parse_arguments() -> CompilerResult<OutputStage> {
     let mut args = std::env::args();
     args.next();
     
@@ -65,7 +67,7 @@ fn usage() -> &'static str {
     `--trace` - Executes the program but displays every byte code instruction as it executes."
 }
 
-fn driver() -> Result<(), String> {
+fn driver() -> CompilerResult<()> {
     let arg = match parse_arguments() {
         Ok(arg) => arg,
         Err(e) => return Err(format!("{}\n\n{}", e, usage())),

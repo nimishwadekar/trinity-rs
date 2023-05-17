@@ -1,4 +1,4 @@
-use crate::lexer::{TokenStream, Token, TokenType, Lexeme};
+use crate::{lexer::{TokenStream, Token, TokenType, Lexeme}, CompilerResult};
 
 //======================================================================================
 //          CONSTANTS
@@ -10,15 +10,21 @@ use crate::lexer::{TokenStream, Token, TokenType, Lexeme};
 //          MACROS
 //======================================================================================
 
-macro_rules! stmt_node {
-    ($s:expr, $lexeme:expr) => {
-        Box::new(StmtNode::new($s, $lexeme))
+macro_rules! span_lexeme {
+    ($first:expr, $last:expr) => {
+        $first.lexeme().clone() + $last.lexeme().clone()
     };
 }
 
-macro_rules! expr_node {
+macro_rules! stmt {
+    ($s:expr, $lexeme:expr) => {
+        Box::new(StmtV1::new($s, $lexeme))
+    };
+}
+
+macro_rules! expr {
     ($e:expr, $lexeme:expr) => {
-        Box::new(ExprNode::new($e, $lexeme))
+        Box::new(ExprV1::new($e, $lexeme))
     };
 }
 
@@ -78,41 +84,41 @@ enum ExprOperator {
 }
 
 #[derive(Debug)]
-pub enum Expr {
-    IntegerLiteral(i32),
+pub enum ExprTypeV1 {
+    IntegerLiteral(Lexeme),
 
     // Unary Operations.
-    Positive(Box<ExprNode>),
+    Positive(Box<ExprV1>),
 
     // Binary Operations.
-    Add{ l: Box<ExprNode>, r: Box<ExprNode> },
+    Add{ l: Box<ExprV1>, r: Box<ExprV1> },
 
     // Ternary Operations.
 }
 
 #[derive(Debug)]
-pub enum Stmt {
-    Expr(Box<ExprNode>),
-    Print(Box<ExprNode>),
-}
-
-#[derive(Debug)]
-pub struct ExprNode {
-    pub expr: Expr,
+pub struct ExprV1 {
+    expr: ExprTypeV1,
     lexeme: Lexeme,
 }
 
 #[derive(Debug)]
-pub struct StmtNode {
-    pub stmt: Stmt,
+pub enum StmtTypeV1 {
+    Expr(Box<ExprV1>),
+    Print(Box<ExprV1>),
+}
+
+#[derive(Debug)]
+pub struct StmtV1 {
+    stmt: StmtTypeV1,
     lexeme: Lexeme,
 }
 
-pub struct Stage1Tree {
-    stmts: Vec<Box<StmtNode>>,
+pub struct ParseTreeV1 {
+    stmts: Vec<Box<StmtV1>>,
 }
 
-pub struct Stage1Parser<'a> {
+pub struct ParserV1<'a> {
     tokens: TokenStream<'a>,
 }
 
@@ -120,7 +126,7 @@ pub struct Stage1Parser<'a> {
 //          STANDARD LIBRARY TRAIT IMPLEMENTATIONS
 //======================================================================================
 
-impl std::fmt::Display for Stage1Tree {
+impl std::fmt::Display for ParseTreeV1 {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         for stmt in self.stmts.iter() {
             writeln!(f, "{}", stmt)?;
@@ -129,25 +135,25 @@ impl std::fmt::Display for Stage1Tree {
     }
 }
 
-impl std::fmt::Display for StmtNode {
+impl std::fmt::Display for StmtV1 {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         self.stmt.display_format(f, 0)
     }
 }
 
-impl std::fmt::Display for ExprNode {
+impl std::fmt::Display for ExprV1 {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         self.expr.display_format(f, 0)
     }
 }
 
-impl std::fmt::Display for Stmt {
+impl std::fmt::Display for StmtTypeV1 {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         self.display_format(f, 0)
     }
 }
 
-impl std::fmt::Display for Expr {
+impl std::fmt::Display for ExprTypeV1 {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         self.display_format(f, 0)
     }
@@ -157,18 +163,13 @@ impl std::fmt::Display for Expr {
 //          IMPLEMENTATIONS
 //======================================================================================
 
-impl<'a> Stage1Parser<'a> {
-    pub fn new(tokens: TokenStream<'a>) -> Self {
-        Self {
-            tokens,
-        }
+impl<'a> ParserV1<'a> {
+    pub fn parse(tokens: TokenStream<'a>)-> CompilerResult<ParseTreeV1> {
+        let mut parser = Self { tokens };
+        Ok(ParseTreeV1 { stmts: parser.parse_program()? })
     }
 
-    pub fn parse(&mut self)-> Result<Stage1Tree, String> {
-        Ok(Stage1Tree { stmts: self.parse_program()? })
-    }
-
-    fn parse_program(&mut self) -> Result<Vec<Box<StmtNode>>, String> {
+    fn parse_program(&mut self) -> Result<Vec<Box<StmtV1>>, String> {
         let mut stmts = Vec::new();
         loop {
             let stmt = match self.peek_token()? {
@@ -195,57 +196,63 @@ impl<'a> Stage1Parser<'a> {
     }
 
     /// PrintStmt := `print` Expr `;`
-    fn parse_print_stmt(&mut self) -> Result<Box<StmtNode>, String> {
-        let token_print = self.consume_token(TokenType::Print)?;
+    fn parse_print_stmt(&mut self) -> CompilerResult<Box<StmtV1>> {
+        let first_token = self.consume_token(TokenType::Print)?;
         let expr = self.parse_expr()?;
-        let token_semicolon = self.consume_token(TokenType::Semicolon)?;
+        let last_token = self.consume_token(TokenType::Semicolon)?;
 
-        /* Ok(Box::new(StmtNode::new(
-            Stmt::Print(expr),
-            token_print.lexeme().clone() + expr.lexeme + token_semicolon.lexeme().clone()
-        ))) */
-        let expr_lexeme = expr.lexeme.clone();
-        Ok(stmt_node!(
-            Stmt::Print(expr),
-            token_print.lexeme().clone() + expr_lexeme + token_semicolon.lexeme().clone()
-        ))
+        let lexeme = span_lexeme!(first_token, last_token);
+        Ok(stmt!(StmtTypeV1::Print(expr), lexeme))
     }
 
     /// ExprStmt := Expr `;`
-    fn parse_expr_stmt(&mut self) -> Result<Box<StmtNode>, String> {
+    fn parse_expr_stmt(&mut self) -> CompilerResult<Box<StmtV1>> {
         let expr = self.parse_expr()?;
-        let token_semicolon = self.consume_token(TokenType::Semicolon)?;
+        let last_token = self.consume_token(TokenType::Semicolon)?;
 
-        let expr_lexeme = expr.lexeme.clone();
-        Ok(stmt_node!(
-            Stmt::Expr(expr),
-            expr_lexeme + token_semicolon.lexeme().clone()
-        ))
+        let lexeme = span_lexeme!(expr, last_token);
+        Ok(stmt!(StmtTypeV1::Expr(expr), lexeme))
     }
 
     /// Expr := Expr (`+`) Expr \
     /// Expr := (`+`) Expr \
     /// Expr := `(` Expr `)`
-    fn parse_expr(&mut self) -> Result<Box<ExprNode>, String> {
+    fn parse_expr(&mut self) -> CompilerResult<Box<ExprV1>> {
         self.parse_expr_recursive(OperatorPrecedence::None as u8)
     }
 }
 
-impl Stage1Tree {
-    pub fn stmts(&self) -> &Vec<Box<StmtNode>> {
+impl ParseTreeV1 {
+    pub fn stmts(&self) -> &Vec<Box<StmtV1>> {
         &self.stmts
     }
 }
 
-impl StmtNode {
-    fn new(stmt: Stmt, lexeme: Lexeme) -> Self {
+impl StmtV1 {
+    fn new(stmt: StmtTypeV1, lexeme: Lexeme) -> Self {
         Self { stmt, lexeme }
+    }
+
+    pub fn stmt(&self) -> &StmtTypeV1 {
+        &self.stmt
+    }
+
+    pub fn lexeme(&self) -> &Lexeme {
+        &self.lexeme
     }
 }
 
-impl ExprNode {
-    fn new(expr: Expr, lexeme: Lexeme) -> Self {
+impl ExprV1 {
+    fn new(expr: ExprTypeV1, lexeme: Lexeme) -> Self {
         Self { expr, lexeme }
+    }
+
+    pub fn expr(&self) -> &ExprTypeV1 {
+        &self.expr
+    }
+
+    pub fn lexeme(&self) -> &Lexeme {
+        &self.lexeme
     }
 }
 
@@ -253,31 +260,26 @@ impl ExprNode {
 //          EXPR PARSING METHODS
 //=======================================
 
-impl<'a> Stage1Parser<'a> {
-    fn parse_expr_recursive(&mut self, min_bp: u8) -> Result<Box<ExprNode>, String> {
+impl<'a> ParserV1<'a> {
+    fn parse_expr_recursive(&mut self, min_bp: u8) -> CompilerResult<Box<ExprV1>> {
         // Assumes first token of expression has been validated.
         let tok = self.expect_token()?;
         let mut lhs = match tok.token() {
-            TokenType::IntegerLiteral(value) => Box::new(ExprNode::new(Expr::IntegerLiteral(*value), tok.lexeme().clone())),
+            TokenType::IntegerLiteral(value) => Box::new(ExprV1::new(ExprTypeV1::IntegerLiteral(value.clone()), tok.lexeme().clone())),
             TokenType::LParen => {
                 let lhs = self.parse_expr_recursive(OperatorPrecedence::None as u8)?;
                 let token_rparen = self.consume_token(TokenType::RParen)?;
 
-                expr_node!(
-                    lhs.expr,
-                    tok.lexeme().clone() + lhs.lexeme + token_rparen.lexeme().clone()
-                )
+                let lexeme = span_lexeme!(tok, token_rparen);
+                expr!(lhs.expr, lexeme)
             },
             t if t.as_prefix_operator().is_some() => {
                 let op = unsafe { t.as_prefix_operator().unwrap_unchecked() };
                 let ((), rbp) = op.prefix_binding_power();
                 let rhs = self.parse_expr_recursive(rbp)?;
 
-                let rhs_lexeme = rhs.lexeme.clone();
-                expr_node!(
-                    Expr::new(op, vec![rhs]),
-                    tok.lexeme().clone() + rhs_lexeme
-                )
+                let lexeme = span_lexeme!(tok, rhs);
+                expr!(ExprTypeV1::new(op, vec![rhs]), lexeme)
             },
 
             _ => return Err(err_format("Expected expression", tok)),
@@ -303,18 +305,11 @@ impl<'a> Stage1Parser<'a> {
                     let rhs = self.parse_expr_recursive(0)?;
                     let token_rsquare = self.consume_token(TokenType::RSquare)?;
 
-                    let (lhs_lexeme, rhs_lexeme) = (lhs.lexeme.clone(), rhs.lexeme.clone());
-                    expr_node!(
-                        Expr::new(op, vec![lhs, rhs]),
-                        lhs_lexeme + token_op.lexeme().clone() + rhs_lexeme + token_rsquare.lexeme().clone()
-                    )
+                    let lexeme = span_lexeme!(lhs, token_rsquare);
+                    expr!(ExprTypeV1::new(op, vec![lhs, rhs]), lexeme)
                 } else {
-
-                    let lhs_lexeme = lhs.lexeme.clone();
-                    expr_node!(
-                        Expr::new(op, vec![lhs]),
-                        lhs_lexeme + token_op.lexeme().clone()
-                    )
+                    let lexeme = span_lexeme!(lhs, token_op);
+                    expr!(ExprTypeV1::new(op, vec![lhs]), lexeme)
                 };
                 continue;
             }
@@ -327,11 +322,8 @@ impl<'a> Stage1Parser<'a> {
 
                 let rhs = self.parse_expr_recursive(rbp)?;
 
-                let (lhs_lexeme, rhs_lexeme) = (lhs.lexeme.clone(), rhs.lexeme.clone());
-                lhs = expr_node!(
-                    Expr::new(op, vec![lhs, rhs]),
-                    lhs_lexeme + token_op.lexeme().clone() + rhs_lexeme
-                );
+                let lexeme = span_lexeme!(lhs, rhs);
+                lhs = expr!(ExprTypeV1::new(op, vec![lhs, rhs]), lexeme);
                 continue;
             }
             
@@ -397,8 +389,8 @@ impl TokenType {
     }
 }
 
-impl Expr {
-    fn new(operator: ExprOperator, operands: Vec<Box<ExprNode>>) -> Self {
+impl ExprTypeV1 {
+    fn new(operator: ExprOperator, operands: Vec<Box<ExprV1>>) -> Self {
         let operand_count = operands.len();
         let mut operands = operands.into_iter();
         let msg = format!("`{operator:?}` with {operand_count} operand{}", if operand_count == 1 {""} else {"s"});
@@ -408,7 +400,7 @@ impl Expr {
             ExprOperator::UnaryPlus => {
                 assert_eq!(operand_count, 1, "{}", msg);
                 let expr = unsafe { operands.next().unwrap_unchecked() };
-                Expr::Positive(expr)
+                ExprTypeV1::Positive(expr)
             },
 
             // Binary
@@ -416,7 +408,7 @@ impl Expr {
                 assert_eq!(operand_count, 2, "{}", msg);
                 let l = unsafe { operands.next().unwrap_unchecked() };
                 let r = unsafe { operands.next().unwrap_unchecked() };
-                Expr::Add{ l, r }
+                ExprTypeV1::Add{ l, r }
             },
             ExprOperator::Subscript => {
                 assert_eq!(operand_count, 2, "{}", msg);
@@ -430,9 +422,9 @@ impl Expr {
 //          HELPER METHODS
 //=======================================
 
-impl<'a> Stage1Parser<'a> {
+impl<'a> ParserV1<'a> {
     #[inline]
-    fn peek_token(&mut self) -> Result<Option<Token>, String> {
+    fn peek_token(&mut self) -> CompilerResult<Option<Token>> {
         match self.tokens.peek() {
             None => Ok(None),
             Some(t) => match t.token() {
@@ -443,7 +435,7 @@ impl<'a> Stage1Parser<'a> {
     }
 
     #[inline]
-    fn next_token(&mut self) -> Result<Option<Token>, String> {
+    fn next_token(&mut self) -> CompilerResult<Option<Token>> {
         match self.tokens.next() {
             None => Ok(None),
             Some(t) => match t.token() {
@@ -455,7 +447,7 @@ impl<'a> Stage1Parser<'a> {
 
     /// Returns an `Err` if `EOF` was encountered.
     #[inline]
-    fn expect_token(&mut self) -> Result<Token, String> {
+    fn expect_token(&mut self) -> CompilerResult<Token> {
         let t = self.tokens.next();
         match self.handle_eof_token(t)? {
             t => match t.token() {
@@ -466,7 +458,7 @@ impl<'a> Stage1Parser<'a> {
     }
 
     #[inline]
-    fn consume_token(&mut self, expected: TokenType) -> Result<Token, String> {
+    fn consume_token(&mut self, expected: TokenType) -> CompilerResult<Token> {
         let location = self.tokens.location();
         let token = match self.tokens.next() {
             None => return Err(format!("<{}> Expected `{}`, reached end of file", location, expected)),
@@ -480,7 +472,7 @@ impl<'a> Stage1Parser<'a> {
     }
 
     #[inline(always)]
-    fn handle_eof_token(&self, token: Option<Token>) -> Result<Token, String> {
+    fn handle_eof_token(&self, token: Option<Token>) -> CompilerResult<Token> {
         token.ok_or(format!("<{}> Unexpected end of file", self.tokens.location()))
     }
 }
@@ -491,16 +483,16 @@ impl<'a> Stage1Parser<'a> {
 
 const NEXT_INDENT: usize = 3;
 
-impl Stmt {
+impl StmtTypeV1 {
     fn display_format(&self, f: &mut std::fmt::Formatter<'_>, indent: usize) -> std::fmt::Result {
         write!(f, "{:indent$}", "")?;
         let indent = indent + NEXT_INDENT;
         match self {
-            Stmt::Expr(expr) => {
+            StmtTypeV1::Expr(expr) => {
                 writeln!(f, "ExprStmt")?;
                 expr.expr.display_format(f, indent)?;
             },
-            Stmt::Print(expr) => {
+            StmtTypeV1::Print(expr) => {
                 writeln!(f, "PrintStmt")?;
                 expr.expr.display_format(f, indent)?;
             },
@@ -509,17 +501,17 @@ impl Stmt {
     }
 }
 
-impl Expr {
+impl ExprTypeV1 {
     fn display_format(&self, f: &mut std::fmt::Formatter<'_>, indent: usize) -> std::fmt::Result {
         write!(f, "{:indent$}", "")?;
         let indent = indent + NEXT_INDENT;
         match self {
-            Expr::IntegerLiteral(value) => writeln!(f, "Integer {}", value)?,
-            Expr::Positive(expr) => {
+            ExprTypeV1::IntegerLiteral(value) => writeln!(f, "Integer {}", value)?,
+            ExprTypeV1::Positive(expr) => {
                 writeln!(f, "Positive")?;
                 expr.expr.display_format(f, indent)?;
             },
-            Expr::Add { l, r } => {
+            ExprTypeV1::Add { l, r } => {
                 writeln!(f, "Add")?;
                 l.expr.display_format(f, indent)?;
                 r.expr.display_format(f, indent)?;

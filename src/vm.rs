@@ -1,4 +1,4 @@
-use crate::bytecode::{ByteCode, Instruction};
+use crate::{bytecode::{ByteCode, Instruction}, CompilerResult};
 
 //======================================================================================
 //          CONSTANTS
@@ -29,7 +29,7 @@ pub struct TrinityVM;
 //======================================================================================
 
 impl TrinityVM {
-    pub fn execute(code: ByteCode, trace: bool) -> Result<(), String> {
+    pub fn execute(code: ByteCode, trace: bool) -> CompilerResult<()> {
         let ByteCode { code, constants } = code;
         let mut pc = 0;
         let mut stack = Vec::new();

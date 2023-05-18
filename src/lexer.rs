@@ -1,6 +1,5 @@
 use std::{
-    rc::Rc,
-    str::from_utf8_unchecked,
+    str::from_utf8_unchecked, slice::from_raw_parts, ops::Deref,
 };
 
 use crate::EOF;
@@ -17,9 +16,9 @@ const KEYWORDS: [(&str, TokenType); 1] = [
 //          STRUCTURES
 //======================================================================================
 
-#[derive(Debug, Clone, Eq)]
+#[derive(Debug, Clone, Copy, Eq)]
 pub struct Lexeme {
-    src: Rc<String>,
+    src: *const u8,
     offset: usize,
     length: usize,
     line: usize,
@@ -49,7 +48,7 @@ pub struct Token {
 }
 
 pub struct Lexer {
-    src: Rc<String>,
+    src: String,
 }
 
 pub struct TokenStream<'a> {
@@ -101,17 +100,17 @@ impl std::fmt::Display for TokenType {
     }
 }
 
-/* impl std::ops::Deref for Lexeme {
+impl Deref for Lexeme {
     type Target = str;
 
     fn deref(&self) -> &Self::Target {
-        unsafe { from_utf8_unchecked(&self.src.as_bytes()[self.offset..]) }
+        unsafe { from_utf8_unchecked(from_raw_parts(self.src.add(self.offset), self.length)) }
     }
-} */
+}
 
 impl std::fmt::Display for Lexeme {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", self.as_str())
+        f.write_str(self)
     }
 }
 
@@ -135,7 +134,7 @@ impl std::ops::Add for Lexeme {
 
 impl PartialEq for Lexeme {
     fn eq(&self, other: &Self) -> bool {
-        self.as_str() == other.as_str()
+        self.deref() == other.deref()
     }
 }
 
@@ -257,7 +256,7 @@ impl<'a> TokenStream<'a> {
     fn lexeme(&self, length: usize) -> Lexeme {
         assert!(self.offset + length <= self.lexer.src.len());
         Lexeme {
-            src: self.lexer.src.clone(),
+            src: self.lexer.src.as_ptr(),
             offset: self.offset,
             length,
             line: self.line + 1,
@@ -276,7 +275,7 @@ impl<'a> TokenStream<'a> {
 }
 
 impl Lexer {
-    pub fn new(src: Rc<String>) -> Self {
+    pub fn new(src: String) -> Self {
         Self { src }
     }
 
@@ -300,10 +299,6 @@ impl Lexer {
 }
 
 impl Lexeme {
-    pub fn as_str(&self) -> &str {
-        unsafe { from_utf8_unchecked(&self.src.as_bytes()[self.offset .. self.offset + self.length]) }
-    }
-
     pub fn location(&self) -> String {
         format!("ln {}, col {}", self.line, self.column)
     }

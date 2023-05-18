@@ -1,5 +1,3 @@
-use std::rc::Rc;
-
 use codegen::CodeGenerator;
 use lexer::Lexer;
 use parser::Parser;
@@ -76,12 +74,12 @@ fn driver() -> CompilerResult<()> {
     let src = match std::fs::read_to_string("test.neo") {
         Ok(mut src) => {
             src.push(EOF);
-            Rc::new(src)
+            src
         },
         Err(e) => return Err(e.to_string()),
     };
 
-    let lexer = Lexer::new(src.clone());
+    let lexer = Lexer::new(src);
 
     if let OutputStage::Lex = arg {
         lexer.print_tokens();

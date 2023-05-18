@@ -30,7 +30,7 @@ pub enum Instruction {
 
 #[derive(Debug)]
 pub struct Constants {
-    pool: HashMap<i32, u8>,
+    pool: HashMap<i64, u8>,
 }
 
 #[derive(Debug)]
@@ -100,7 +100,7 @@ impl ByteCode {
         self.code.push(instr);
     }
 
-    pub fn add_constant(&mut self, constant: i32) -> Result<u8, String> {
+    pub fn add_constant(&mut self, constant: i64) -> Result<u8, String> {
         self.constants.add_constant(constant)
     }
 }
@@ -112,7 +112,7 @@ impl Constants {
         }
     }
 
-    pub fn to_vec(&self) -> Vec<i32> {
+    pub fn to_vec(&self) -> Vec<i64> {
         let mut vec = vec![0; self.pool.len()];
         for (&constant, &index) in self.pool.iter() {
             vec[index as usize] = constant;
@@ -120,7 +120,7 @@ impl Constants {
         vec
     }
 
-    fn add_constant(&mut self, constant: i32) -> CompilerResult<u8> {
+    fn add_constant(&mut self, constant: i64) -> CompilerResult<u8> {
         let constant_count = self.pool.len();
         match self.pool.entry(constant) {
             Entry::Occupied(e) => Ok(*e.get()),

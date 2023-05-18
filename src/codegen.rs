@@ -66,7 +66,7 @@ impl CodeGenerator {
     fn generate_expr(&mut self, expr: &Expr) -> CompilerResult<()> {
         match expr.expr() {
             ExprType::IntegerLiteral(value) => {
-                let index = self.code.add_constant(value.as_str().parse::<i32>().unwrap())?;
+                let index = self.code.add_constant(value.parse::<i64>().unwrap())?;
                 self.code.write_instruction(Instruction::LoadConstant { index });
             },
 

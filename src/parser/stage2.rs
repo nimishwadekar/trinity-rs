@@ -12,7 +12,17 @@ use crate::parser::stage1::{ParseTreeV1, StmtV1, StmtTypeV1, ExprV1, ExprTypeV1}
 //          MACROS
 //======================================================================================
 
+macro_rules! is_int {
+    ($e:expr) => {
+        $e.data_type == DataType::Int
+    };
+}
 
+macro_rules! is_type_eq {
+    ($a:expr, $b:expr) => {
+        $a.data_type == $b.data_type
+    };
+}
 
 //======================================================================================
 //          STRUCTURES
@@ -20,7 +30,7 @@ use crate::parser::stage1::{ParseTreeV1, StmtV1, StmtTypeV1, ExprV1, ExprTypeV1}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum DataType {
-    I32,
+    Int,
 }
 
 #[derive(Debug)]
@@ -76,25 +86,19 @@ impl std::fmt::Display for ParseTreeV2 {
 
 impl std::fmt::Display for StmtV2 {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        self.stmt.display_format(f, 0)
+        self.display_format(f, 0)
     }
 }
 
 impl std::fmt::Display for ExprV2 {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        self.expr.display_format(f, 0)
-    }
-}
-
-impl std::fmt::Display for StmtTypeV2 {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         self.display_format(f, 0)
     }
 }
 
-impl std::fmt::Display for ExprTypeV2 {
+impl std::fmt::Display for DataType {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        self.display_format(f, 0)
+        write!(f, "{:?}", self)
     }
 }
 
@@ -128,17 +132,24 @@ impl ParserV2 {
                 let l = self.parse_expr(l)?;
                 let r = self.parse_expr(r)?;
                 
-                // Do type checking for addition.
+                let data_type = if is_int!(l) && is_int!(r) {
+                    l.data_type
+                } else {
+                    return Err(err_format("Invalid operand data type for `+`", l.lexeme()));
+                };
 
-                let data_type = l.data_type;
                 (ExprTypeV2::Add { l, r }, data_type)
             },
 
             ExprTypeV1::Positive(expr) => {
                 let expr = self.parse_expr(expr)?;
-                // Type check
+                
+                let data_type = if is_int!(expr) {
+                    expr.data_type
+                } else {
+                    return Err(err_format("Invalid operand data type for `+`", expr.lexeme()));
+                };
 
-                let data_type = expr.data_type;
                 (ExprTypeV2::Positive(expr), data_type)
             }
         };
@@ -147,7 +158,11 @@ impl ParserV2 {
     }
 
     fn get_integer_type(&self, lexeme: &Lexeme) -> CompilerResult<DataType> {
-        Ok(DataType::I32)
+        if let Ok(..) = lexeme.parse::<i64>() {
+            return Ok(DataType::Int);
+        }
+        
+        Err(err_format("Integer too large", lexeme))
     }
 }
 
@@ -195,38 +210,38 @@ impl ExprV2 {
 
 const NEXT_INDENT: usize = 3;
 
-impl StmtTypeV2 {
+impl StmtV2 {
     fn display_format(&self, f: &mut std::fmt::Formatter<'_>, indent: usize) -> std::fmt::Result {
         write!(f, "{:indent$}", "")?;
         let indent = indent + NEXT_INDENT;
-        match self {
+        match self.stmt() {
             StmtTypeV2::Expr(expr) => {
                 writeln!(f, "ExprStmt")?;
-                expr.expr.display_format(f, indent)?;
+                expr.display_format(f, indent)?;
             },
             StmtTypeV2::Print(expr) => {
                 writeln!(f, "PrintStmt")?;
-                expr.expr.display_format(f, indent)?;
+                expr.display_format(f, indent)?;
             },
         };
         Ok(())
     }
 }
 
-impl ExprTypeV2 {
+impl ExprV2 {
     fn display_format(&self, f: &mut std::fmt::Formatter<'_>, indent: usize) -> std::fmt::Result {
-        write!(f, "{:indent$}", "")?;
+        write!(f, "{:indent$} <{}> ", "", self.data_type)?;
         let indent = indent + NEXT_INDENT;
-        match self {
+        match self.expr() {
             ExprTypeV2::IntegerLiteral(value) => writeln!(f, "Integer {}", value)?,
             ExprTypeV2::Positive(expr) => {
                 writeln!(f, "Positive")?;
-                expr.expr.display_format(f, indent)?;
+                expr.display_format(f, indent)?;
             },
             ExprTypeV2::Add { l, r } => {
                 writeln!(f, "Add")?;
-                l.expr.display_format(f, indent)?;
-                r.expr.display_format(f, indent)?;
+                l.display_format(f, indent)?;
+                r.display_format(f, indent)?;
             },
         };
         Ok(())
@@ -234,6 +249,6 @@ impl ExprTypeV2 {
 }
 
 #[inline(always)]
-fn err_format(err: &str, t: Token) -> String {
-    format!("<{}> `{}`: {}", t.lexeme().location(), t.lexeme(), err)
+fn err_format(err: &str, lexeme: &Lexeme) -> String {
+    format!("<{}> `{}`: {}", lexeme.location(), lexeme, err)
 }

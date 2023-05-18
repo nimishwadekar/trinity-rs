@@ -137,23 +137,11 @@ impl std::fmt::Display for ParseTreeV1 {
 
 impl std::fmt::Display for StmtV1 {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        self.stmt.display_format(f, 0)
-    }
-}
-
-impl std::fmt::Display for ExprV1 {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        self.expr.display_format(f, 0)
-    }
-}
-
-impl std::fmt::Display for StmtTypeV1 {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         self.display_format(f, 0)
     }
 }
 
-impl std::fmt::Display for ExprTypeV1 {
+impl std::fmt::Display for ExprV1 {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         self.display_format(f, 0)
     }
@@ -483,38 +471,38 @@ impl<'a> ParserV1<'a> {
 
 const NEXT_INDENT: usize = 3;
 
-impl StmtTypeV1 {
+impl StmtV1 {
     fn display_format(&self, f: &mut std::fmt::Formatter<'_>, indent: usize) -> std::fmt::Result {
         write!(f, "{:indent$}", "")?;
         let indent = indent + NEXT_INDENT;
-        match self {
+        match self.stmt() {
             StmtTypeV1::Expr(expr) => {
                 writeln!(f, "ExprStmt")?;
-                expr.expr.display_format(f, indent)?;
+                expr.display_format(f, indent)?;
             },
             StmtTypeV1::Print(expr) => {
                 writeln!(f, "PrintStmt")?;
-                expr.expr.display_format(f, indent)?;
+                expr.display_format(f, indent)?;
             },
         };
         Ok(())
     }
 }
 
-impl ExprTypeV1 {
+impl ExprV1 {
     fn display_format(&self, f: &mut std::fmt::Formatter<'_>, indent: usize) -> std::fmt::Result {
         write!(f, "{:indent$}", "")?;
         let indent = indent + NEXT_INDENT;
-        match self {
+        match self.expr() {
             ExprTypeV1::IntegerLiteral(value) => writeln!(f, "Integer {}", value)?,
             ExprTypeV1::Positive(expr) => {
                 writeln!(f, "Positive")?;
-                expr.expr.display_format(f, indent)?;
+                expr.display_format(f, indent)?;
             },
             ExprTypeV1::Add { l, r } => {
                 writeln!(f, "Add")?;
-                l.expr.display_format(f, indent)?;
-                r.expr.display_format(f, indent)?;
+                l.display_format(f, indent)?;
+                r.display_format(f, indent)?;
             },
         };
         Ok(())

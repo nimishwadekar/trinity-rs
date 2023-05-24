@@ -1,5 +1,5 @@
 use crate::CompilerResult;
-use crate::lexer::{Token, Lexeme};
+use crate::lexer::Lexeme;
 use crate::parser::stage1::{ParseTreeV1, StmtV1, StmtTypeV1, ExprV1, ExprTypeV1};
 
 //======================================================================================
@@ -12,15 +12,15 @@ use crate::parser::stage1::{ParseTreeV1, StmtV1, StmtTypeV1, ExprV1, ExprTypeV1}
 //          MACROS
 //======================================================================================
 
-macro_rules! is_int {
-    ($e:expr) => {
-        $e.data_type == DataType::Int
-    };
-}
-
 macro_rules! is_type_eq {
     ($a:expr, $b:expr) => {
         $a.data_type == $b.data_type
+    };
+}
+
+macro_rules! is_int {
+    ($e:expr) => {
+        $e.data_type == DataType::Int
     };
 }
 
@@ -180,10 +180,6 @@ impl StmtV2 {
     pub fn stmt(&self) -> &StmtTypeV2 {
         &self.stmt
     }
-
-    pub fn lexeme(&self) -> &Lexeme {
-        &self.lexeme
-    }
 }
 
 impl ExprV2 {
@@ -193,10 +189,6 @@ impl ExprV2 {
 
     pub fn expr(&self) -> &ExprTypeV2 {
         &self.expr
-    }
-
-    pub fn data_type(&self) -> &DataType {
-        &self.data_type
     }
 
     pub fn lexeme(&self) -> &Lexeme {

@@ -1,5 +1,9 @@
 use crate::{bytecode::{ByteCode, Instruction}, CompilerResult};
 
+use self::stack::{Stack, Value};
+
+mod stack;
+
 //======================================================================================
 //          CONSTANTS
 //======================================================================================
@@ -10,7 +14,9 @@ use crate::{bytecode::{ByteCode, Instruction}, CompilerResult};
 //          MACROS
 //======================================================================================
 
-
+macro_rules! int {
+    ($e:expr) => { Value::Int($e) };
+}
 
 //======================================================================================
 //          STRUCTURES
@@ -32,7 +38,7 @@ impl TrinityVM {
     pub fn execute(code: ByteCode, trace: bool) -> CompilerResult<()> {
         let ByteCode { code, constants } = code;
         let mut pc = 0;
-        let mut stack = Vec::new();
+        let mut stack = Stack::new();
 
         if trace {
             println!("CONSTANTS:\n{}\n", constants);
@@ -42,29 +48,29 @@ impl TrinityVM {
 
         loop {
             if trace {
-                println!("Stack: {:?}\nNext: {}", stack, code[pc]);
+                println!("Stack: {}\nNext: {}", stack, code[pc]);
             }
 
             match code[pc] {
                 Instruction::LoadConstant { index } => {
-                    stack.push(constants[index as usize]);
+                    stack.push(int!(constants[index as usize]))?;
                 },
 
                 Instruction::Add => {
-                    let r = stack.pop().unwrap();
-                    let l = stack.pop().unwrap();
-                    stack.push(l + r);
+                    let r = stack.pop().as_int();
+                    let l = stack.pop().as_int();
+                    stack.push(int!(l + r))?;
                 },
 
                 Instruction::Print => {
                     if trace {
                         print!(">>> ");
                     }
-                    println!("{}", stack.pop().unwrap());
+                    println!("{}", stack.pop().as_int());
                 },
 
                 Instruction::Pop => {
-                    stack.pop().unwrap();
+                    stack.pop();
                 },
 
                 Instruction::End => {

@@ -1,4 +1,4 @@
-use std::collections::{HashMap, hash_map::Entry};
+use std::{collections::{HashMap, hash_map::Entry}, fmt::Display};
 
 use crate::CompilerResult;
 
@@ -20,17 +20,23 @@ use crate::CompilerResult;
 
 #[derive(Debug)]
 pub enum Instruction {
-    LoadConstant{ index: u8 },
-    Add,
+    LoadConstantInt { index: u8 },
+    LoadConstantFloat { index: u8 },
+
+    AddInt,
+    AddFloat,
+
+    PrintInt,
+    PrintFloat,
+
     Pop,
-    Print,
 
     End,
 }
 
 #[derive(Debug)]
-pub struct Constants {
-    pool: HashMap<i64, u8>,
+pub struct Constants<T: Display> {
+    pool: Vec<T>
 }
 
 #[derive(Debug)]
@@ -38,28 +44,40 @@ pub struct ByteCode {
     pub code: Vec<Instruction>,
 
     /// constant -> index.
-    pub constants: Constants,
+    pub constants_int: Constants<i64>,
+    pub constants_float: Constants<f64>,
 }
 
 //======================================================================================
 //          STANDARD LIBRARY TRAIT IMPLEMENTATIONS
 //======================================================================================
 
+impl<T: Display> std::ops::Deref for Constants<T> {
+    type Target = [T];
+
+    fn deref(&self) -> &Self::Target {
+        self.pool.as_slice()
+    }
+}
+
 impl std::fmt::Display for Instruction {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Instruction::LoadConstant { index } => write!(f, "LoadConstant {}", index),
-            Instruction::Add => write!(f, "Add"),
+            Instruction::LoadConstantInt { index } => write!(f, "LoadConstantInt {}", index),
+            Instruction::LoadConstantFloat { index } => write!(f, "LoadConstantFloat {}", index),
+            Instruction::AddInt => write!(f, "AddInt"),
+            Instruction::AddFloat => write!(f, "AddFloat"),
+            Instruction::PrintInt => write!(f, "PrintInt"),
+            Instruction::PrintFloat => write!(f, "PrintFloat"),
             Instruction::Pop => write!(f, "Pop"),
-            Instruction::Print => write!(f, "Print"),
             Instruction::End => write!(f, "End"),
         }
     }
 }
 
-impl std::fmt::Display for Constants {
+impl<T: Display> std::fmt::Display for Constants<T> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let mut constants = self.to_vec().into_iter().enumerate().peekable();
+        let mut constants = self.pool.iter().enumerate().peekable();
         while let Some((index, constant)) = constants.next() {
             write!(f, "[{}] {}", index, constant)?;
             if constants.peek().is_some() {
@@ -72,7 +90,7 @@ impl std::fmt::Display for Constants {
 
 impl std::fmt::Display for ByteCode {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        writeln!(f, "CONSTANTS:\n{}\n\nCODE:", self.constants)?;
+        writeln!(f, "CONSTANTS INT:\n{}\n\nCONSTANTS FLOAT:\n{}\n\nCODE:", self.constants_int, self.constants_float)?;
         let mut code = self.code.iter().peekable();
         while let Some(instr) = code.next() {
             write!(f, "{}", instr)?;
@@ -92,7 +110,8 @@ impl ByteCode {
     pub fn new() -> Self {
         Self {
             code: Vec::new(),
-            constants: Constants::new(),
+            constants_int: Constants::new(),
+            constants_float: Constants::new(),
         }
     }
 
@@ -100,38 +119,29 @@ impl ByteCode {
         self.code.push(instr);
     }
 
-    pub fn add_constant(&mut self, constant: i64) -> Result<u8, String> {
-        self.constants.add_constant(constant)
+    pub fn insert_constant_int(&mut self, constant: i64) -> Result<u8, String> {
+        self.constants_int.insert(constant)
+    }
+
+    pub fn insert_constant_float(&mut self, constant: f64) -> Result<u8, String> {
+        self.constants_float.insert(constant)
     }
 }
 
-impl Constants {
+impl<T: Display> Constants<T> {
     fn new() -> Self {
         Self {
-            pool: HashMap::new(),
+            pool: Vec::new(),
         }
     }
 
-    pub fn to_vec(&self) -> Vec<i64> {
-        let mut vec = vec![0; self.pool.len()];
-        for (&constant, &index) in self.pool.iter() {
-            vec[index as usize] = constant;
+    fn insert(&mut self, constant: T) -> CompilerResult<u8> {
+        if self.pool.len() <= u8::MAX as usize {
+            self.pool.push(constant);
+            Ok((self.pool.len() - 1) as u8)
         }
-        vec
-    }
-
-    fn add_constant(&mut self, constant: i64) -> CompilerResult<u8> {
-        let constant_count = self.pool.len();
-        match self.pool.entry(constant) {
-            Entry::Occupied(e) => Ok(*e.get()),
-            Entry::Vacant(e) => {
-                if constant_count <= u8::MAX as usize {
-                    Ok(*e.insert(constant_count as u8))
-                }
-                else {
-                    Err("Too many constants".to_string())
-                }
-            }
+        else {
+            Err("Too many constants".to_string())
         }
     }
 }

@@ -1,5 +1,5 @@
 use crate::{
-    parser::{ParseTree, Expr, ExprType, Stmt, StmtType},
+    parser::{ParseTree, Expr, ExprType, Stmt, StmtType, DataType},
     bytecode::{ByteCode, Instruction},
     CompilerResult,
 };
@@ -57,7 +57,11 @@ impl CodeGenerator {
             },
             StmtType::Print(expr) => {
                 self.generate_expr(expr)?;
-                self.code.write_instruction(Instruction::Print);
+                self.code.write_instruction(match expr.dtype() {
+                    DataType::Int => Instruction::PrintInt,
+                    DataType::Float => Instruction::PrintFloat,
+                    t => unreachable!("Invalid print {t}"),
+                });
             }
         };
         Ok(())
@@ -66,8 +70,13 @@ impl CodeGenerator {
     fn generate_expr(&mut self, expr: &Expr) -> CompilerResult<()> {
         match expr.expr() {
             ExprType::IntegerLiteral(value) => {
-                let index = self.code.add_constant(value.parse::<i64>().unwrap())?;
-                self.code.write_instruction(Instruction::LoadConstant { index });
+                let index = self.code.insert_constant_int(*value)?;
+                self.code.write_instruction(Instruction::LoadConstantInt { index });
+            },
+
+            ExprType::FloatLiteral(value) => {
+                let index = self.code.insert_constant_float(*value)?;
+                self.code.write_instruction(Instruction::LoadConstantFloat { index });
             },
 
             ExprType::Positive(expr) => {
@@ -77,7 +86,11 @@ impl CodeGenerator {
             ExprType::Add { l, r } => {
                 self.generate_expr(l)?;
                 self.generate_expr(r)?;
-                self.code.write_instruction(Instruction::Add);
+                self.code.write_instruction(match expr.dtype() {
+                    DataType::Int => Instruction::AddInt,
+                    DataType::Float => Instruction::AddFloat,
+                    t => unreachable!("Invalid add {t}"),
+                });
             }
         };
         Ok(())

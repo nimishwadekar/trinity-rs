@@ -1,4 +1,6 @@
-use crate::{lexer::{TokenStream, Token, TokenType, Lexeme}, CompilerResult};
+use crate::{lexer::{TokenStream, Token, TokenType, Lexeme}, CompilerResult, err};
+
+use super::ast::{Expr, ExprType, Stmt, StmtType, ParseTree, DataType};
 
 //======================================================================================
 //          CONSTANTS
@@ -18,13 +20,13 @@ macro_rules! span_lexeme {
 
 macro_rules! stmt {
     ($s:expr, $lexeme:expr) => {
-        Box::new(StmtV1::new($s, $lexeme))
+        Box::new(Stmt::new($s, $lexeme))
     };
 }
 
-macro_rules! expr {
+macro_rules! untyped_expr {
     ($e:expr, $lexeme:expr) => {
-        Box::new(ExprV1::new($e, $lexeme))
+        Box::new(Expr::new($e, DataType::Unit, $lexeme))
     };
 }
 
@@ -83,42 +85,7 @@ enum ExprOperator {
     Subscript,
 }
 
-#[derive(Debug)]
-pub enum ExprTypeV1 {
-    IntegerLiteral(Lexeme),
-
-    // Unary Operations.
-    Positive(Box<ExprV1>),
-
-    // Binary Operations.
-    Add{ l: Box<ExprV1>, r: Box<ExprV1> },
-
-    // Ternary Operations.
-}
-
-#[derive(Debug)]
-pub struct ExprV1 {
-    expr: ExprTypeV1,
-    lexeme: Lexeme,
-}
-
-#[derive(Debug)]
-pub enum StmtTypeV1 {
-    Expr(Box<ExprV1>),
-    Print(Box<ExprV1>),
-}
-
-#[derive(Debug)]
-pub struct StmtV1 {
-    stmt: StmtTypeV1,
-    lexeme: Lexeme,
-}
-
-pub struct ParseTreeV1 {
-    stmts: Vec<Box<StmtV1>>,
-}
-
-pub struct ParserV1<'a> {
+pub struct Constructor<'a> {
     tokens: TokenStream<'a>,
 }
 
@@ -126,38 +93,19 @@ pub struct ParserV1<'a> {
 //          STANDARD LIBRARY TRAIT IMPLEMENTATIONS
 //======================================================================================
 
-impl std::fmt::Display for ParseTreeV1 {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        for stmt in self.stmts.iter() {
-            writeln!(f, "{}", stmt)?;
-        }
-        Ok(())
-    }
-}
 
-impl std::fmt::Display for StmtV1 {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        self.display_format(f, 0)
-    }
-}
-
-impl std::fmt::Display for ExprV1 {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        self.display_format(f, 0)
-    }
-}
 
 //======================================================================================
 //          IMPLEMENTATIONS
 //======================================================================================
 
-impl<'a> ParserV1<'a> {
-    pub fn parse(tokens: TokenStream<'a>)-> CompilerResult<ParseTreeV1> {
+impl<'a> Constructor<'a> {
+    pub fn parse(tokens: TokenStream<'a>)-> CompilerResult<ParseTree> {
         let mut parser = Self { tokens };
-        Ok(ParseTreeV1 { stmts: parser.parse_program()? })
+        Ok(ParseTree::new(parser.parse_program()?))
     }
 
-    fn parse_program(&mut self) -> Result<Vec<Box<StmtV1>>, String> {
+    fn parse_program(&mut self) -> Result<Vec<Box<Stmt>>, String> {
         let mut stmts = Vec::new();
         loop {
             let stmt = match self.peek_token()? {
@@ -175,7 +123,7 @@ impl<'a> ParserV1<'a> {
                         continue;
                     },
 
-                    _ => return Err(err_format("Invalid start of statement", token)),
+                    _ => return err!("Invalid start of statement", token.lexeme()),
                 }
             };
             stmts.push(stmt);
@@ -184,63 +132,31 @@ impl<'a> ParserV1<'a> {
     }
 
     /// PrintStmt := `print` Expr `;`
-    fn parse_print_stmt(&mut self) -> CompilerResult<Box<StmtV1>> {
+    fn parse_print_stmt(&mut self) -> CompilerResult<Box<Stmt>> {
         let first_token = self.consume_token(TokenType::Print)?;
         let expr = self.parse_expr()?;
         let last_token = self.consume_token(TokenType::Semicolon)?;
 
         let lexeme = span_lexeme!(first_token, last_token);
-        Ok(stmt!(StmtTypeV1::Print(expr), lexeme))
+        Ok(stmt!(StmtType::Print(expr), lexeme))
     }
 
     /// ExprStmt := Expr `;`
-    fn parse_expr_stmt(&mut self) -> CompilerResult<Box<StmtV1>> {
+    fn parse_expr_stmt(&mut self) -> CompilerResult<Box<Stmt>> {
         let expr = self.parse_expr()?;
         let last_token = self.consume_token(TokenType::Semicolon)?;
 
         let lexeme = span_lexeme!(expr, last_token);
-        Ok(stmt!(StmtTypeV1::Expr(expr), lexeme))
+        Ok(stmt!(StmtType::Expr(expr), lexeme))
     }
 
+    /// 
     /// Expr := Expr (`+`) Expr \
     /// Expr := (`+`) Expr \
     /// Expr := `(` Expr `)`
-    fn parse_expr(&mut self) -> CompilerResult<Box<ExprV1>> {
+    /// 
+    fn parse_expr(&mut self) -> CompilerResult<Box<Expr>> {
         self.parse_expr_recursive(OperatorPrecedence::None as u8)
-    }
-}
-
-impl ParseTreeV1 {
-    pub fn stmts(&self) -> &Vec<Box<StmtV1>> {
-        &self.stmts
-    }
-}
-
-impl StmtV1 {
-    fn new(stmt: StmtTypeV1, lexeme: Lexeme) -> Self {
-        Self { stmt, lexeme }
-    }
-
-    pub fn stmt(&self) -> &StmtTypeV1 {
-        &self.stmt
-    }
-
-    pub fn lexeme(&self) -> &Lexeme {
-        &self.lexeme
-    }
-}
-
-impl ExprV1 {
-    fn new(expr: ExprTypeV1, lexeme: Lexeme) -> Self {
-        Self { expr, lexeme }
-    }
-
-    pub fn expr(&self) -> &ExprTypeV1 {
-        &self.expr
-    }
-
-    pub fn lexeme(&self) -> &Lexeme {
-        &self.lexeme
     }
 }
 
@@ -248,29 +164,34 @@ impl ExprV1 {
 //          EXPR PARSING METHODS
 //=======================================
 
-impl<'a> ParserV1<'a> {
-    fn parse_expr_recursive(&mut self, min_bp: u8) -> CompilerResult<Box<ExprV1>> {
+impl<'a> Constructor<'a> {
+    fn parse_expr_recursive(&mut self, min_bp: u8) -> CompilerResult<Box<Expr>> {
         // Assumes first token of expression has been validated.
         let tok = self.expect_token()?;
         let mut lhs = match tok.token() {
-            TokenType::IntegerLiteral(value) => Box::new(ExprV1::new(ExprTypeV1::IntegerLiteral(value.clone()), tok.lexeme().clone())),
+            TokenType::IntegerLiteral => untyped_expr!(ExprType::from_integer_literal(tok.lexeme())?, tok.lexeme().clone()),
+
+            TokenType::FloatLiteral => untyped_expr!(ExprType::from_float_literal(tok.lexeme())?, tok.lexeme().clone()),
+
             TokenType::LParen => {
                 let lhs = self.parse_expr_recursive(OperatorPrecedence::None as u8)?;
                 let token_rparen = self.consume_token(TokenType::RParen)?;
 
                 let lexeme = span_lexeme!(tok, token_rparen);
-                expr!(lhs.expr, lexeme)
+                untyped_expr!(lhs.take_expr(), lexeme)
             },
+
             t if t.as_prefix_operator().is_some() => {
                 let op = unsafe { t.as_prefix_operator().unwrap_unchecked() };
                 let ((), rbp) = op.prefix_binding_power();
                 let rhs = self.parse_expr_recursive(rbp)?;
 
                 let lexeme = span_lexeme!(tok, rhs);
-                expr!(ExprTypeV1::new(op, vec![rhs]), lexeme)
+                let expr = ExprType::new(op, vec![rhs]);
+                untyped_expr!(expr, lexeme)
             },
 
-            _ => return Err(err_format("Expected expression", tok)),
+            _ => return err!("Expected expression", tok.lexeme()),
         };
 
         loop {
@@ -294,10 +215,12 @@ impl<'a> ParserV1<'a> {
                     let token_rsquare = self.consume_token(TokenType::RSquare)?;
 
                     let lexeme = span_lexeme!(lhs, token_rsquare);
-                    expr!(ExprTypeV1::new(op, vec![lhs, rhs]), lexeme)
+                    let expr = ExprType::new(op, vec![lhs, rhs]);
+                    untyped_expr!(expr, lexeme)
                 } else {
                     let lexeme = span_lexeme!(lhs, token_op);
-                    expr!(ExprTypeV1::new(op, vec![lhs]), lexeme)
+                    let expr = ExprType::new(op, vec![lhs]);
+                    untyped_expr!(expr, lexeme)
                 };
                 continue;
             }
@@ -311,7 +234,8 @@ impl<'a> ParserV1<'a> {
                 let rhs = self.parse_expr_recursive(rbp)?;
 
                 let lexeme = span_lexeme!(lhs, rhs);
-                lhs = expr!(ExprTypeV1::new(op, vec![lhs, rhs]), lexeme);
+                let expr = ExprType::new(op, vec![lhs, rhs]);
+                lhs = untyped_expr!(expr, lexeme);
                 continue;
             }
             
@@ -360,7 +284,8 @@ impl OperatorPrecedence {
 impl TokenType {
     fn is_expr_starter(&self) -> bool {
         match self {
-            TokenType::IntegerLiteral(..)
+            TokenType::IntegerLiteral
+            | TokenType::FloatLiteral
             | TokenType::Plus
             | TokenType::LParen
             => true,
@@ -377,8 +302,8 @@ impl TokenType {
     }
 }
 
-impl ExprTypeV1 {
-    fn new(operator: ExprOperator, operands: Vec<Box<ExprV1>>) -> Self {
+impl ExprType {
+    fn new(operator: ExprOperator, operands: Vec<Box<Expr>>) -> Self {
         let operand_count = operands.len();
         let mut operands = operands.into_iter();
         let msg = format!("`{operator:?}` with {operand_count} operand{}", if operand_count == 1 {""} else {"s"});
@@ -388,7 +313,7 @@ impl ExprTypeV1 {
             ExprOperator::UnaryPlus => {
                 assert_eq!(operand_count, 1, "{}", msg);
                 let expr = unsafe { operands.next().unwrap_unchecked() };
-                ExprTypeV1::Positive(expr)
+                ExprType::Positive(expr)
             },
 
             // Binary
@@ -396,12 +321,26 @@ impl ExprTypeV1 {
                 assert_eq!(operand_count, 2, "{}", msg);
                 let l = unsafe { operands.next().unwrap_unchecked() };
                 let r = unsafe { operands.next().unwrap_unchecked() };
-                ExprTypeV1::Add{ l, r }
+                ExprType::Add{ l, r }
             },
             ExprOperator::Subscript => {
                 assert_eq!(operand_count, 2, "{}", msg);
                 todo!("subscript expression")
             },
+        }
+    }
+
+    fn from_integer_literal(lexeme: &Lexeme) -> CompilerResult<Self> {
+        match lexeme.parse::<i64>() {
+            Ok(val) => Ok(Self::IntegerLiteral(val)),
+            Err(e) => err!(e.to_string().as_str(), lexeme),
+        }
+    }
+
+    fn from_float_literal(lexeme: &Lexeme) -> CompilerResult<Self> {
+        match lexeme.parse::<f64>() {
+            Ok(val) => Ok(Self::FloatLiteral(val)),
+            Err(e) => err!(e.to_string().as_str(), lexeme),
         }
     }
 }
@@ -410,13 +349,13 @@ impl ExprTypeV1 {
 //          HELPER METHODS
 //=======================================
 
-impl<'a> ParserV1<'a> {
+impl<'a> Constructor<'a> {
     #[inline]
     fn peek_token(&mut self) -> CompilerResult<Option<Token>> {
         match self.tokens.peek() {
             None => Ok(None),
             Some(t) => match t.token() {
-                TokenType::Error(..) => Err(err_format("Unknown character", t)),
+                TokenType::Error(..) => err!("Unknown character", t.lexeme()),
                 _ => Ok(Some(t)),
             },
         }
@@ -427,7 +366,7 @@ impl<'a> ParserV1<'a> {
         match self.tokens.next() {
             None => Ok(None),
             Some(t) => match t.token() {
-                TokenType::Error(..) => Err(err_format("Unknown character", t)),
+                TokenType::Error(..) => err!("Unknown character", t.lexeme()),
                 _ => Ok(Some(t)),
             },
         }
@@ -439,7 +378,7 @@ impl<'a> ParserV1<'a> {
         let t = self.tokens.next();
         match self.handle_eof_token(t)? {
             t => match t.token() {
-                TokenType::Error(..) => Err(err_format("Unknown character", t)),
+                TokenType::Error(..) => err!("Unknown character", t.lexeme()),
                 _ => Ok(t),
             },
         }
@@ -453,7 +392,7 @@ impl<'a> ParserV1<'a> {
             Some(t) => t,
         };
         match token.token() {
-            TokenType::Error(..) => Err(err_format("Unknown character", token)),
+            TokenType::Error(..) => err!("Unknown character", token.lexeme()),
             t if t == &expected => Ok(token),
             t => Err(format!("<{}> Expected `{}`, found `{}`", token.lexeme().location(), expected, t)),
         }
@@ -463,53 +402,4 @@ impl<'a> ParserV1<'a> {
     fn handle_eof_token(&self, token: Option<Token>) -> CompilerResult<Token> {
         token.ok_or(format!("<{}> Unexpected end of file", self.tokens.location()))
     }
-}
-
-//=======================================
-//          FORMAT METHODS
-//=======================================
-
-const NEXT_INDENT: usize = 3;
-
-impl StmtV1 {
-    fn display_format(&self, f: &mut std::fmt::Formatter<'_>, indent: usize) -> std::fmt::Result {
-        write!(f, "{:indent$}", "")?;
-        let indent = indent + NEXT_INDENT;
-        match self.stmt() {
-            StmtTypeV1::Expr(expr) => {
-                writeln!(f, "ExprStmt")?;
-                expr.display_format(f, indent)?;
-            },
-            StmtTypeV1::Print(expr) => {
-                writeln!(f, "PrintStmt")?;
-                expr.display_format(f, indent)?;
-            },
-        };
-        Ok(())
-    }
-}
-
-impl ExprV1 {
-    fn display_format(&self, f: &mut std::fmt::Formatter<'_>, indent: usize) -> std::fmt::Result {
-        write!(f, "{:indent$}", "")?;
-        let indent = indent + NEXT_INDENT;
-        match self.expr() {
-            ExprTypeV1::IntegerLiteral(value) => writeln!(f, "Integer {}", value)?,
-            ExprTypeV1::Positive(expr) => {
-                writeln!(f, "Positive")?;
-                expr.display_format(f, indent)?;
-            },
-            ExprTypeV1::Add { l, r } => {
-                writeln!(f, "Add")?;
-                l.display_format(f, indent)?;
-                r.display_format(f, indent)?;
-            },
-        };
-        Ok(())
-    }
-}
-
-#[inline(always)]
-fn err_format(err: &str, t: Token) -> String {
-    format!("<{}> `{}`: {}", t.lexeme().location(), t.lexeme(), err)
 }

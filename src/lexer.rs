@@ -5,10 +5,10 @@ use std::{
 use crate::EOF;
 
 //======================================================================================
-//          CONSTANTS
+//          DATA
 //======================================================================================
 
-const KEYWORDS: [(&str, TokenType); 1] = [
+static KEYWORDS: [(&str, TokenType); 1] = [
     ("print", TokenType::Print),
 ];
 
@@ -27,7 +27,8 @@ pub struct Lexeme {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum TokenType {
-    IntegerLiteral(Lexeme),
+    IntegerLiteral,
+    FloatLiteral,
 
     Plus,
 
@@ -76,7 +77,12 @@ impl<'a> Iterator for TokenStream<'a> {
 
 impl std::fmt::Display for Token {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "[{}:{}] {}", self.lexeme.line, self.lexeme.column, self.token)
+        write!(f, "[{}:{}] {}", self.lexeme.line, self.lexeme.column, self.token)?;
+        match self.token {
+            TokenType::IntegerLiteral | TokenType::FloatLiteral => write!(f, " `{}`", self.lexeme())?,
+            _ => (),
+        };
+        Ok(())
     }
 }
 
@@ -84,7 +90,8 @@ impl std::fmt::Display for Token {
 impl std::fmt::Display for TokenType {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            TokenType::IntegerLiteral(value) => write!(f, "Int {}", value),
+            TokenType::IntegerLiteral => write!(f, "Int"),
+            TokenType::FloatLiteral => write!(f, "Float"),
             TokenType::Error(ch) => write!(f, "Error '{}'", ch),
             
             TokenType::Plus => write!(f, "+"),
@@ -162,7 +169,7 @@ impl<'a> TokenStream<'a> {
             }
         }
         else if peek.is_digit(10) {
-            self.lex_integer_literal()
+            self.lex_number_literal()
         }
         // Special character.
         else {
@@ -188,17 +195,27 @@ impl<'a> TokenStream<'a> {
         None
     }
 
-    fn lex_integer_literal(&mut self) -> Token {
+    fn lex_number_literal(&mut self) -> Token {
+        let mut is_float = false;
         for (length, c) in self.str().char_indices() {
+            if !is_float && c == '.' {
+                is_float = true;
+                continue;
+            }
+
             if !c.is_digit(10) {
                 let lexeme = self.lexeme(length);
                 self.advance(length);
-                let token = TokenType::IntegerLiteral(lexeme.clone());
+                let token = if is_float {
+                    TokenType::FloatLiteral
+                } else {
+                    TokenType::IntegerLiteral
+                };
                 return Token::new(token, lexeme);
             }
         }
 
-        unreachable!("lex_integer_literal()")
+        unreachable!("lex_number_literal()")
     }
 
     fn lex_single_special_character(&mut self) -> Token {

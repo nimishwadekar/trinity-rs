@@ -19,6 +19,7 @@ const MAX_STACK_ENTRIES: usize = 1 << 17;
 #[derive(Debug)]
 pub enum Value {
     Int(i64),
+    Float(f64),
 }
 
 pub struct Stack {
@@ -63,6 +64,10 @@ impl Stack {
     pub fn pop(&mut self) -> Value {
         self.stack.pop().expect("Empty stack pop")
     }
+
+    pub fn len(&self) -> usize {
+        self.stack.len()
+    }
 }
 
 impl Value {
@@ -70,6 +75,13 @@ impl Value {
         match self {
             Value::Int(val) => val,
             _ => panic!("Expected `Value::Int`, found {:?}", self),
+        }
+    }
+
+    pub fn as_float(self) -> f64 {
+        match self {
+            Value::Float(val) => val,
+            _ => panic!("Expected `Value::Float`, found {:?}", self),
         }
     }
 }

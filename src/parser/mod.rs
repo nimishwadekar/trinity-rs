@@ -1,24 +1,37 @@
 use crate::{lexer::TokenStream, CompilerResult};
 
 use self::{
-    stage1::ParserV1,
-    stage2::{ParseTreeV2, ParserV2}
+    constructor::Constructor,
+    type_checker::TypeChecker,
 };
 
-mod stage1;
-mod stage2;
+/// The AST definition.
+mod ast;
 
-pub use stage2::ParseTreeV2 as ParseTree;
-pub use stage2::ExprV2 as Expr;
-pub use stage2::ExprTypeV2 as ExprType;
-pub use stage2::StmtV2 as Stmt;
-pub use stage2::StmtTypeV2 as StmtType;
+/// Constructs the AST.
+mod constructor;
+
+/// Type-checks the AST.
+mod type_checker;
+
+pub use ast::{Expr, ExprType, Stmt, StmtType, ParseTree, DataType};
+
+#[macro_export]
+macro_rules! err {
+    ($msg:expr, $lexeme:expr) => {
+        Err(format!("<{}> `{}`: {}", $lexeme.location(), $lexeme, $msg))
+    };
+}
 
 pub struct Parser;
 
 impl Parser {
-    pub fn parse<'a>(tokens: TokenStream<'a>)-> CompilerResult<ParseTreeV2> {
-        let tree = ParserV1::parse(tokens)?;
-        ParserV2::parse(tree)
+    // Parsing stages:
+    // 1. Construst syntax tree.
+    // 2. Perform type checking.
+    pub fn parse<'a>(tokens: TokenStream<'a>)-> CompilerResult<ParseTree> {
+        let mut tree = Constructor::parse(tokens)?;
+        TypeChecker::parse(&mut tree)?;
+        Ok(tree)
     }
 }

@@ -8,7 +8,13 @@ use crate::EOF;
 //          DATA
 //======================================================================================
 
-static KEYWORDS: [(&str, TokenType); 1] = [
+static KEYWORDS: [(&str, TokenType); 6] = [
+    ("true", TokenType::True),
+    ("false", TokenType::False),
+    ("not", TokenType::Not),
+    ("and", TokenType::And),
+    ("or", TokenType::Or),
+
     ("print", TokenType::Print),
 ];
 
@@ -29,12 +35,20 @@ pub struct Lexeme {
 pub enum TokenType {
     IntegerLiteral,
     FloatLiteral,
+    Identifier,
 
-    Plus,
+    Equal,
+    Plus, Minus, Star, Slash, Modulo,
+    EqualEqual, NotEqual,
+    Lesser, LesserEqual,
+    Greater, GreaterEqual,
 
     LParen, RParen,
     LSquare, RSquare,
     Semicolon,
+
+    True, False,
+    Not, And, Or,
 
     // Temp.
     Print,
@@ -79,7 +93,9 @@ impl std::fmt::Display for Token {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "[{}:{}] {}", self.lexeme.line, self.lexeme.column, self.token)?;
         match self.token {
-            TokenType::IntegerLiteral | TokenType::FloatLiteral => write!(f, " `{}`", self.lexeme())?,
+            TokenType::IntegerLiteral
+            | TokenType::FloatLiteral
+            | TokenType::Identifier => write!(f, " `{}`", self.lexeme())?,
             _ => (),
         };
         Ok(())
@@ -92,9 +108,21 @@ impl std::fmt::Display for TokenType {
         match self {
             TokenType::IntegerLiteral => write!(f, "Int"),
             TokenType::FloatLiteral => write!(f, "Float"),
-            TokenType::Error(ch) => write!(f, "Error '{}'", ch),
+            TokenType::Identifier => write!(f, "Identifier"),
             
             TokenType::Plus => write!(f, "+"),
+            TokenType::Minus => write!(f, "-"),
+            TokenType::Star => write!(f, "*"),
+            TokenType::Slash => write!(f, "/"),
+            TokenType::Modulo => write!(f, "%"),
+
+            TokenType::Equal => write!(f, "="),
+            TokenType::EqualEqual => write!(f, "=="),
+            TokenType::NotEqual => write!(f, "!="),
+            TokenType::Lesser => write!(f, "<"),
+            TokenType::LesserEqual => write!(f, "<="),
+            TokenType::Greater => write!(f, ">"),
+            TokenType::GreaterEqual => write!(f, ">="),
 
             TokenType::LParen => write!(f, "("),
             TokenType::RParen => write!(f, ")"),
@@ -102,7 +130,15 @@ impl std::fmt::Display for TokenType {
             TokenType::RSquare => write!(f, "]"),
             TokenType::Semicolon => write!(f, ";"),
 
+            TokenType::True => write!(f, "true"),
+            TokenType::False => write!(f, "false"),
+            TokenType::Not => write!(f, "not"),
+            TokenType::And => write!(f, "and"),
+            TokenType::Or => write!(f, "or"),
+
             TokenType::Print => write!(f, "print"),
+
+            TokenType::Error(ch) => write!(f, "Error '{}'", ch),
         }
     }
 }
@@ -163,36 +199,41 @@ impl<'a> TokenStream<'a> {
         let peek = self.peek_char()?;
 
         let token = if peek.is_alphabetic() {
-            match self.lex_keyword() {
-                Some(t) => t,
-                None => todo!("identifiers"),
-            }
+            let token = self.lex_identifier();
+            self.parse_keyword(token)
         }
         else if peek.is_digit(10) {
             self.lex_number_literal()
         }
-        // Special character.
+        // Symbols.
         else {
-            self.lex_single_special_character()
+            self.lex_symbol()
         };
         Some(token)
     }
 
-    fn lex_keyword(&mut self) -> Option<Token> {
-        for (lexeme, ttype) in KEYWORDS.iter() {
-            let bytes = self.str().as_bytes();
-            if bytes.len() < lexeme.len() {
-                continue;
-            }
-            if &unsafe { from_utf8_unchecked(&bytes[..lexeme.len()]) } == lexeme {
-                let length = lexeme.len();
+    fn lex_identifier(&mut self) -> Token {
+        for (length, c) in self.str().char_indices() {
+            if !c.is_alphabetic() && !c.is_digit(10) {
                 let lexeme = self.lexeme(length);
                 self.advance(length);
-                return Some(Token::new(ttype.clone(), lexeme));
+                let token = TokenType::Identifier;
+                return Token::new(token, lexeme);
             }
         }
 
-        None
+        unreachable!("lex_identifier()")
+    }
+
+    fn parse_keyword(&self, identifier: Token) -> Token {
+        assert_eq!(identifier.token, TokenType::Identifier);
+        let lexeme = &identifier.lexeme;
+        for (keyword, ttype) in KEYWORDS.iter() {
+            if keyword.as_bytes() == lexeme.as_bytes() {
+                return Token::new(ttype.clone(), lexeme.clone());
+            }
+        }
+        identifier
     }
 
     fn lex_number_literal(&mut self) -> Token {
@@ -218,14 +259,36 @@ impl<'a> TokenStream<'a> {
         unreachable!("lex_number_literal()")
     }
 
-    fn lex_single_special_character(&mut self) -> Token {
-        let c = self.str().chars().next().expect("lex_single_special_character()");
-        let length = c.len_utf8();
-        let lexeme = self.lexeme(length);
-        self.advance(length);
+    fn lex_symbol(&mut self) -> Token {
+        fn expect_next_or_else(c1: Option<char>, next_char: char, found: TokenType, not_found: TokenType, length: &mut usize) -> TokenType {
+            match c1 {
+                Some(c) if c == next_char => {
+                    *length += c.len_utf8();
+                    found
+                },
+                _ => not_found,
+            }
+        }
 
-        let token = match c {
+        let mut chars = self.str().chars();
+        let c0 = chars.next().expect("lex_single_special_character()");
+        let c1 = chars.next();
+        let mut length = c0.len_utf8();
+
+        let token = match c0 {
             '+' => TokenType::Plus,
+            '-' => TokenType::Minus,
+            '*' => TokenType::Star,
+            '/' => TokenType::Slash,
+            '%' => TokenType::Modulo,
+
+            '=' => expect_next_or_else(c1, '=', TokenType::EqualEqual, TokenType::Equal, &mut length),
+            '<' => expect_next_or_else(c1, '=', TokenType::LesserEqual, TokenType::Lesser, &mut length),
+            '>' => expect_next_or_else(c1, '=', TokenType::GreaterEqual, TokenType::Greater, &mut length),
+            '!' if c1.unwrap_or('\0') == '=' => {
+                length += unsafe { c1.unwrap_unchecked() }.len_utf8();
+                TokenType::NotEqual
+            },
 
             '(' => TokenType::LParen,
             ')' => TokenType::RParen,
@@ -236,6 +299,9 @@ impl<'a> TokenStream<'a> {
 
             c => TokenType::Error(c),
         };
+
+        let lexeme = self.lexeme(length);
+        self.advance(length);
         Token::new(token, lexeme)
     }
 

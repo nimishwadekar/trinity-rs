@@ -79,7 +79,7 @@ impl TypeChecker {
                 let dtype = if is_int!(l) && is_int!(r) || is_float!(l) && is_float!(r) {
                     l.dtype()
                 } else {
-                    return err!("Invalid operand data type for `+`", l.lexeme());
+                    return err!(format!("Invalid operands of types `{}` and `{}` for `+`", l.dtype(), r.dtype()), r.lexeme());
                 };
 
                 expr.set_dtype(dtype);
@@ -91,7 +91,7 @@ impl TypeChecker {
                 let dtype = if is_int!(operand) || is_float!(operand) {
                     operand.dtype()
                 } else {
-                    return err!("Invalid operand data type for `+`", operand.lexeme());
+                    return err!(format!("Invalid operand of type {} for `+`", operand.dtype()), operand.lexeme());
                 };
 
                 expr.set_dtype(dtype);

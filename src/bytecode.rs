@@ -1,4 +1,4 @@
-use std::{collections::{HashMap, hash_map::Entry}, fmt::Display};
+use std::fmt::Display;
 
 use crate::CompilerResult;
 

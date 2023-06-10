@@ -1,6 +1,6 @@
 use crate::{bytecode::{ByteCode, Instruction}, CompilerResult};
 
-use self::stack::{Stack, Value};
+use self::stack::Stack;
 
 mod stack;
 
@@ -30,6 +30,13 @@ macro_rules! bool {
 //          STRUCTURES
 //======================================================================================
 
+#[derive(Debug, Clone, Copy)]
+pub enum Value {
+    Int(i64),
+    Float(f64),
+    Bool(bool),
+}
+
 pub struct TrinityVM;
 
 //======================================================================================
@@ -44,17 +51,24 @@ pub struct TrinityVM;
 
 impl TrinityVM {
     pub fn execute(code: ByteCode, trace: bool, output: &mut impl std::io::Write) -> CompilerResult<()> {
-        let ByteCode { code, constants_int, constants_float } = code;
+        let ByteCode {
+            code,
+            constants_int,
+            constants_float,
+            max_identifiers_in_scope
+        } = code;
         let mut pc = 0;
         let mut stack = Stack::new();
 
         if trace {
-            println!("CONSTANTS INT:\n{}\n\nCONSTANTS FLOAT:\n{}\n", constants_int, constants_float);
+            writeln!(output, "CONSTANTS INT:\n{}\n\nCONSTANTS FLOAT:\n{}\n", constants_int, constants_float).expect("internal write error");
         }
+
+        let mut variables = vec![int!(0); max_identifiers_in_scope];
 
         loop {
             if trace {
-                println!("Stack: {}\nNext: {}", stack, code[pc]);
+                writeln!(output, "Stack: {}\nNext: {}", stack, code[pc]).expect("internal write error");
             }
 
             match code[pc] {
@@ -189,23 +203,31 @@ impl TrinityVM {
                     stack.push(bool!(l || r))?;
                 },
 
+                Instruction::GetInt { index } => {
+                    stack.push(variables[index as usize])?;
+                },
+
+                Instruction::SetInt { index } => {
+                    variables[index as usize] = stack.pop();
+                },
+
                 Instruction::PrintInt => {
                     if trace {
-                        print!(">>> ");
+                        write!(output, ">>> ").expect("internal write error");
                     }
                     writeln!(output, "{}", stack.pop().as_int()).expect("internal write error");
                 },
 
                 Instruction::PrintFloat => {
                     if trace {
-                        print!(">>> ");
+                        write!(output, ">>> ").expect("internal write error");
                     }
                     writeln!(output, "{}", stack.pop().as_float()).expect("internal write error");
                 },
 
                 Instruction::PrintBool => {
                     if trace {
-                        print!(">>> ");
+                        write!(output, ">>> ").expect("internal write error");
                     }
                     writeln!(output, "{}", stack.pop().as_bool()).expect("internal write error");
                 },
@@ -219,11 +241,12 @@ impl TrinityVM {
                         panic!("Program exiting, but stack not empty");
                     }
                     break;
-                }
+                },
+                _ => ()
             }
 
             if trace {
-                println!();
+                writeln!(output).expect("internal write error");
             }
 
             pc += 1;

@@ -1,5 +1,5 @@
 use crate::{CompilerResult, err};
-use super::ast::{ParseTree, Stmt, StmtType, Expr, ExprType, DataType};
+use super::{ast::{ParseTree, Stmt, StmtType, Expr, ExprType, DataType}, Parser};
 
 //======================================================================================
 //          CONSTANTS
@@ -17,7 +17,7 @@ use super::ast::{ParseTree, Stmt, StmtType, Expr, ExprType, DataType};
 //          STRUCTURES
 //======================================================================================
 
-pub struct TypeChecker;
+
 
 //======================================================================================
 //          STANDARD LIBRARY TRAIT IMPLEMENTATIONS
@@ -29,20 +29,28 @@ pub struct TypeChecker;
 //          IMPLEMENTATIONS
 //======================================================================================
 
-impl TypeChecker {
-    pub fn parse(tree: &mut ParseTree)-> CompilerResult<()> {
-        let parser = Self;
+impl<'a> Parser<'a> {
+    pub fn type_check(&mut self, tree: &mut ParseTree)-> CompilerResult<()> {
         for stmt in tree.stmts() {
-            parser.parse_stmt(stmt)?;
+            self.typecheck_stmt(stmt)?;
         }
         Ok(())
     }
 
-    fn parse_stmt(&self, stmt: &Stmt) -> CompilerResult<()> {
+    fn typecheck_stmt(&mut self, stmt: &Stmt) -> CompilerResult<()> {
         match stmt.stmt() {
-            StmtType::Expr(expr) => self.parse_expr(expr)?,
+            StmtType::Expr(expr) => self.typecheck_expr(expr)?,
+
+            StmtType::Let { identifier, dtype, initialiser } => {
+                self.typecheck_expr(initialiser)?;
+                if initialiser.dtype() != *dtype {
+                    return err!("`let` initialiser type mismatch", identifier);
+                }
+                self.symbols.insert(identifier.clone(), *dtype)?;
+            },
+
             StmtType::Print(expr) => {
-                self.parse_expr(expr)?;
+                self.typecheck_expr(expr)?;
                 if !expr.dtype().is_primitive() {
                     return err!("Invalid operand type for `print`", expr.lexeme());
                 }
@@ -51,11 +59,18 @@ impl TypeChecker {
         Ok(())
     }
 
-    fn parse_expr(&self, expr: &Expr) -> CompilerResult<()> {
+    fn typecheck_expr(&self, expr: &Expr) -> CompilerResult<()> {
         match expr.expr() {
             ExprType::IntegerLiteral(..) => expr.set_dtype(DataType::Int),
             ExprType::FloatLiteral(..) => expr.set_dtype(DataType::Float),
             ExprType::BoolLiteral(..) => expr.set_dtype(DataType::Bool),
+            
+            ExprType::Identifier => {
+                match self.symbols.get(expr.lexeme()) {
+                    Some(entry) => expr.set_dtype(entry.dtype),
+                    None => return err!("Undefined identifier", expr.lexeme()),
+                }
+            }
             
             ExprType::Add { l, r }
             | ExprType::Subtract { l, r }
@@ -72,8 +87,8 @@ impl TypeChecker {
             
             | ExprType::And { l, r }
             | ExprType::Or { l, r } => {
-                self.parse_expr(l)?;
-                self.parse_expr(r)?;
+                self.typecheck_expr(l)?;
+                self.typecheck_expr(r)?;
                 
                 let dtype = if match expr.expr() {
                     ExprType::Add {..}
@@ -124,7 +139,7 @@ impl TypeChecker {
             ExprType::Positive(operand)
             | ExprType::Negative(operand)
             | ExprType::Not(operand) => {
-                self.parse_expr(operand)?;
+                self.typecheck_expr(operand)?;
                 
                 let dtype = if match expr.expr() {
                     ExprType::Positive(..)

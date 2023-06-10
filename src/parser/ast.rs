@@ -32,6 +32,7 @@ pub enum ExprType {
     IntegerLiteral(i64),
     FloatLiteral(f64),
     BoolLiteral(bool),
+    Identifier,
 
     // Unary Operations.
     Positive(Box<Expr>),
@@ -61,6 +62,9 @@ pub enum ExprType {
 #[derive(Debug)]
 pub enum StmtType {
     Expr(Box<Expr>),
+    Let { identifier: Lexeme, dtype: DataType, initialiser: Box<Expr> },
+
+    // Temp
     Print(Box<Expr>),
 }
 
@@ -204,6 +208,11 @@ impl Stmt {
                 writeln!(f, "ExprStmt")?;
                 expr.display_format(f, indent)?;
             },
+            StmtType::Let { identifier, dtype, initialiser } => {
+                writeln!(f, "LetStmt {identifier} <{dtype}>")?;
+                initialiser.display_format(f, indent)?;
+            }
+
             StmtType::Print(expr) => {
                 writeln!(f, "PrintStmt")?;
                 expr.display_format(f, indent)?;
@@ -221,6 +230,7 @@ impl Expr {
             ExprType::IntegerLiteral(value) => writeln!(f, "Integer {}", value)?,
             ExprType::FloatLiteral(value) => writeln!(f, "Float {}", value)?,
             ExprType::BoolLiteral(value) => writeln!(f, "Bool {}", value)?,
+            ExprType::Identifier => writeln!(f, "Identifier {}", self.lexeme())?,
 
             ExprType::Positive(expr)
             | ExprType::Negative(expr)

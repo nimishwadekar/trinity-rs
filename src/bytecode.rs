@@ -20,10 +20,19 @@ use crate::CompilerResult;
 
 #[derive(Debug)]
 pub enum Instruction {
+    /// Push `constants[index]`.
     LoadConstantInt { index: u8 },
+
+    /// Push `0`.
     LoadConstantZeroInt,
+
+    /// Push `constants[index]`.
     LoadConstantFloat { index: u8 },
+
+    /// Push `0.0`.
     LoadConstantZeroFloat,
+
+    /// Push [bool] value.
     LoadConstantBool(bool),
 
     AddInt,
@@ -48,6 +57,13 @@ pub enum Instruction {
     AndBool,
     OrBool,
 
+    SetInt { index: u8 },
+    SetFloat { index: u8 },
+    SetBool { index: u8 },
+    GetInt { index: u8 },
+    GetFloat { index: u8 },
+    GetBool { index: u8 },
+
     PrintInt,
     PrintFloat,
     PrintBool,
@@ -69,6 +85,7 @@ pub struct ByteCode {
     /// constant -> index.
     pub constants_int: Constants<i64>,
     pub constants_float: Constants<f64>,
+    pub max_identifiers_in_scope: usize,
 }
 
 //======================================================================================
@@ -86,9 +103,15 @@ impl<T: Display> std::ops::Deref for Constants<T> {
 impl std::fmt::Display for Instruction {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Instruction::LoadConstantInt { index } => write!(f, "LoadConstantInt {}", index),
-            Instruction::LoadConstantFloat { index } => write!(f, "LoadConstantFloat {}", index),
-            Instruction::LoadConstantBool(value) => write!(f, "LoadConstantBool {}", value),
+            Instruction::LoadConstantInt { index } => write!(f, "LoadConstantInt {index}"),
+            Instruction::LoadConstantFloat { index } => write!(f, "LoadConstantFloat {index}"),
+            Instruction::LoadConstantBool(value) => write!(f, "LoadConstantBool {value}"),
+            Instruction::GetInt { index } => write!(f, "GetInt {index}"),
+            Instruction::GetFloat { index } => write!(f, "GetFloat {index}"),
+            Instruction::GetBool { index } => write!(f, "GetBool {index}"),
+            Instruction::SetInt { index } => write!(f, "SetInt {index}"),
+            Instruction::SetFloat { index } => write!(f, "SetFloat {index}"),
+            Instruction::SetBool { index } => write!(f, "SetBool {index}"),
             i => write!(f, "{:?}", i),
         }
     }
@@ -131,6 +154,7 @@ impl ByteCode {
             code: Vec::new(),
             constants_int: Constants::new(),
             constants_float: Constants::new(),
+            max_identifiers_in_scope: 0,
         }
     }
 

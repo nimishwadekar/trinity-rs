@@ -8,9 +8,10 @@ use crate::EOF;
 //          DATA
 //======================================================================================
 
-static KEYWORDS: [(&str, TokenType); 6] = [
+static KEYWORDS: [(&str, TokenType); 7] = [
     ("and", TokenType::And),
     ("false", TokenType::False),
+    ("let", TokenType::Let),
     ("not", TokenType::Not),
     ("or", TokenType::Or),
     ("true", TokenType::True),
@@ -22,7 +23,7 @@ static KEYWORDS: [(&str, TokenType); 6] = [
 //          STRUCTURES
 //======================================================================================
 
-#[derive(Debug, Clone, Copy, Eq)]
+#[derive(Debug, Clone, Copy)]
 pub struct Lexeme {
     src: *const u8,
     offset: usize,
@@ -45,10 +46,11 @@ pub enum TokenType {
 
     LParen, RParen,
     LSquare, RSquare,
-    Semicolon,
+    Colon, Semicolon,
 
     True, False,
     Not, And, Or,
+    Let,
 
     // Temp.
     Print,
@@ -128,6 +130,7 @@ impl std::fmt::Display for TokenType {
             TokenType::RParen => write!(f, ")"),
             TokenType::LSquare => write!(f, "["),
             TokenType::RSquare => write!(f, "]"),
+            TokenType::Colon => write!(f, ":"),
             TokenType::Semicolon => write!(f, ";"),
 
             TokenType::True => write!(f, "true"),
@@ -135,6 +138,7 @@ impl std::fmt::Display for TokenType {
             TokenType::Not => write!(f, "not"),
             TokenType::And => write!(f, "and"),
             TokenType::Or => write!(f, "or"),
+            TokenType::Let => write!(f, "let"),
 
             TokenType::Print => write!(f, "print"),
 
@@ -178,6 +182,14 @@ impl std::ops::Add for Lexeme {
 impl PartialEq for Lexeme {
     fn eq(&self, other: &Self) -> bool {
         self.deref() == other.deref()
+    }
+}
+
+impl Eq for Lexeme {}
+
+impl std::hash::Hash for Lexeme {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        self.deref().hash(state)
     }
 }
 
@@ -295,6 +307,7 @@ impl<'a> TokenStream<'a> {
             '[' => TokenType::LSquare,
             ']' => TokenType::RSquare,
 
+            ':' => TokenType::Colon,
             ';' => TokenType::Semicolon,
 
             c => TokenType::Error(c),

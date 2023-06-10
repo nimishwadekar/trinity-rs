@@ -1,5 +1,5 @@
 use crate::{
-    parser::{ParseTree, Expr, ExprType, Stmt, StmtType, DataType},
+    parser::{ParseTree, Expr, ExprType, Stmt, StmtType, DataType, SymbolTable},
     bytecode::{ByteCode, Instruction},
     CompilerResult,
 };
@@ -22,6 +22,7 @@ use crate::{
 
 pub struct CodeGenerator {
     code: ByteCode,
+    table: SymbolTable,
 }
 
 //======================================================================================
@@ -35,9 +36,13 @@ pub struct CodeGenerator {
 //======================================================================================
 
 impl CodeGenerator {
-    pub fn generate(parsed_program: ParseTree) -> CompilerResult<ByteCode> {
-        let mut codegen = CodeGenerator { code: ByteCode::new() };
+    pub fn generate(parsed_program: ParseTree, symbol_table: SymbolTable) -> CompilerResult<ByteCode> {
+        let mut codegen = CodeGenerator {
+            code: ByteCode::new(),
+            table: symbol_table,
+        };
         codegen.generate_program(parsed_program)?;
+        codegen.code.max_identifiers_in_scope = codegen.table.max_identifiers_in_scope();
         Ok(codegen.code)
     }
 
@@ -55,6 +60,19 @@ impl CodeGenerator {
                 self.generate_expr(expr)?;
                 self.code.write_instruction(Instruction::Pop);
             },
+
+            StmtType::Let { identifier, dtype, initialiser } => {
+                self.generate_expr(initialiser)?;
+                let entry = self.table.get(identifier).unwrap();
+                let index = entry.index;
+                self.code.write_instruction(match dtype {
+                    DataType::Int => Instruction::SetInt { index },
+                    DataType::Float => Instruction::SetFloat { index },
+                    DataType::Bool => Instruction::SetBool { index },
+                    _ => unreachable!("let codegen"),
+                });
+            },
+
             StmtType::Print(expr) => {
                 self.generate_expr(expr)?;
                 self.code.write_instruction(match expr.dtype() {
@@ -88,6 +106,17 @@ impl CodeGenerator {
             },
 
             ExprType::BoolLiteral(value) => self.code.write_instruction(Instruction::LoadConstantBool(*value)),
+
+            ExprType::Identifier => {
+                let entry = self.table.get(expr.lexeme()).unwrap();
+                let index = entry.index;
+                self.code.write_instruction(match entry.dtype {
+                    DataType::Int => Instruction::GetInt { index },
+                    DataType::Float => Instruction::GetFloat { index },
+                    DataType::Bool => Instruction::GetBool { index },
+                    _ => unreachable!("identifier codegen"),
+                });
+            },
 
             ExprType::Positive(expr) => {
                 self.generate_expr(expr)?;

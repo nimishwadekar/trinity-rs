@@ -1,6 +1,6 @@
-use crate::{lexer::{TokenStream, Token, TokenType, Lexeme}, CompilerResult, err};
+use crate::{lexer::{Token, TokenType, Lexeme}, CompilerResult, err};
 
-use super::ast::{Expr, ExprType, Stmt, StmtType, ParseTree, DataType};
+use super::{ast::{Expr, ExprType, Stmt, StmtType, ParseTree, DataType}, Parser};
 
 //======================================================================================
 //          CONSTANTS
@@ -110,10 +110,6 @@ enum ExprOperator {
     Not,
 }
 
-pub struct Constructor<'a> {
-    tokens: TokenStream<'a>,
-}
-
 //======================================================================================
 //          STANDARD LIBRARY TRAIT IMPLEMENTATIONS
 //======================================================================================
@@ -124,23 +120,26 @@ pub struct Constructor<'a> {
 //          IMPLEMENTATIONS
 //======================================================================================
 
-impl<'a> Constructor<'a> {
-    pub fn parse(tokens: TokenStream<'a>)-> CompilerResult<ParseTree> {
-        let mut parser = Self { tokens };
-        Ok(ParseTree::new(parser.parse_program()?))
+impl<'a> Parser<'a> {
+    pub fn construct(&mut self)-> CompilerResult<ParseTree> {
+        Ok(ParseTree::new(self.construct_program()?))
     }
 
-    fn parse_program(&mut self) -> Result<Vec<Box<Stmt>>, String> {
+    fn construct_program(&mut self) -> Result<Vec<Box<Stmt>>, String> {
         let mut stmts = Vec::new();
         loop {
             let stmt = match self.peek_token()? {
                 None => break,
                 Some(token) => match token.token() {
+                    // Temp
                     // Print statement.
-                    TokenType::Print => self.parse_print_stmt()?,
+                    TokenType::Print => self.construct_print_stmt()?,
+
+                    // Let statement.
+                    TokenType::Let => self.construct_let_stmt()?,
 
                     // Expression statement.
-                    t if t.is_expr_starter() => self.parse_expr_stmt()?,
+                    t if t.is_expr_starter() => self.construct_expr_stmt()?,
 
                     // Empty statement.
                     TokenType::Semicolon => {
@@ -156,10 +155,25 @@ impl<'a> Constructor<'a> {
         Ok(stmts)
     }
 
+    /// LetStmt := `let` Identifier `:` Identifier `=` Expr `;`
+    fn construct_let_stmt(&mut self) -> CompilerResult<Box<Stmt>> {
+        let first_token = self.consume_token(TokenType::Let)?;
+        let identifier = self.consume_token(TokenType::Identifier)?;
+        self.consume_token(TokenType::Colon)?;
+        let dtype = self.construct_dtype()?;
+        self.consume_token(TokenType::Equal)?;
+        let initialiser = self.construct_expr()?;
+        let last_token = self.consume_token(TokenType::Semicolon)?;
+
+        let identifier = identifier.lexeme().clone();
+        let lexeme = span_lexeme!(first_token, last_token);
+        Ok(stmt!(StmtType::Let { identifier, dtype, initialiser }, lexeme))
+    }
+
     /// PrintStmt := `print` Expr `;`
-    fn parse_print_stmt(&mut self) -> CompilerResult<Box<Stmt>> {
+    fn construct_print_stmt(&mut self) -> CompilerResult<Box<Stmt>> {
         let first_token = self.consume_token(TokenType::Print)?;
-        let expr = self.parse_expr()?;
+        let expr = self.construct_expr()?;
         let last_token = self.consume_token(TokenType::Semicolon)?;
 
         let lexeme = span_lexeme!(first_token, last_token);
@@ -167,12 +181,24 @@ impl<'a> Constructor<'a> {
     }
 
     /// ExprStmt := Expr `;`
-    fn parse_expr_stmt(&mut self) -> CompilerResult<Box<Stmt>> {
-        let expr = self.parse_expr()?;
+    fn construct_expr_stmt(&mut self) -> CompilerResult<Box<Stmt>> {
+        let expr = self.construct_expr()?;
         let last_token = self.consume_token(TokenType::Semicolon)?;
 
         let lexeme = span_lexeme!(expr, last_token);
         Ok(stmt!(StmtType::Expr(expr), lexeme))
+    }
+
+    fn construct_dtype(&mut self) -> CompilerResult<DataType> {
+        let dtype = self.consume_token(TokenType::Identifier)?;
+
+        use std::ops::Deref;
+        match dtype.lexeme().deref() {
+            "int" => Ok(DataType::Int),
+            "float" => Ok(DataType::Float),
+            "bool" => Ok(DataType::Bool),
+            _ => err!("Invalid type", dtype.lexeme()),
+        }
     }
 
     /// 
@@ -180,8 +206,8 @@ impl<'a> Constructor<'a> {
     /// Expr := (`+`) Expr \
     /// Expr := `(` Expr `)`
     /// 
-    fn parse_expr(&mut self) -> CompilerResult<Box<Expr>> {
-        self.parse_expr_recursive(OperatorPrecedence::None as u8)
+    fn construct_expr(&mut self) -> CompilerResult<Box<Expr>> {
+        self.construct_expr_recursive(OperatorPrecedence::None as u8)
     }
 }
 
@@ -189,8 +215,8 @@ impl<'a> Constructor<'a> {
 //          EXPR PARSING METHODS
 //=======================================
 
-impl<'a> Constructor<'a> {
-    fn parse_expr_recursive(&mut self, min_bp: u8) -> CompilerResult<Box<Expr>> {
+impl<'a> Parser<'a> {
+    fn construct_expr_recursive(&mut self, min_bp: u8) -> CompilerResult<Box<Expr>> {
         // Assumes first token of expression has been validated.
         let tok = self.expect_token()?;
         let mut lhs = match tok.token() {
@@ -201,8 +227,10 @@ impl<'a> Constructor<'a> {
             TokenType::True => untyped_expr!(ExprType::BoolLiteral(true), tok.lexeme().clone()),
             TokenType::False => untyped_expr!(ExprType::BoolLiteral(false), tok.lexeme().clone()),
 
+            TokenType::Identifier => untyped_expr!(ExprType::Identifier, tok.lexeme().clone()),
+
             TokenType::LParen => {
-                let lhs = self.parse_expr_recursive(OperatorPrecedence::None as u8)?;
+                let lhs = self.construct_expr_recursive(OperatorPrecedence::None as u8)?;
                 let token_rparen = self.consume_token(TokenType::RParen)?;
 
                 let lexeme = span_lexeme!(tok, token_rparen);
@@ -212,7 +240,7 @@ impl<'a> Constructor<'a> {
             t if t.as_prefix_operator().is_some() => {
                 let op = unsafe { t.as_prefix_operator().unwrap_unchecked() };
                 let ((), rbp) = op.prefix_binding_power();
-                let rhs = self.parse_expr_recursive(rbp)?;
+                let rhs = self.construct_expr_recursive(rbp)?;
 
                 let lexeme = span_lexeme!(tok, rhs);
                 let expr = ExprType::new(op, vec![rhs]);
@@ -254,7 +282,7 @@ impl<'a> Constructor<'a> {
                 self.next_token().unwrap();
 
                 lhs = if let ExprOperator::Subscript = op {
-                    let rhs = self.parse_expr_recursive(0)?;
+                    let rhs = self.construct_expr_recursive(0)?;
                     let token_rsquare = self.consume_token(TokenType::RSquare)?;
 
                     let lexeme = span_lexeme!(lhs, token_rsquare);
@@ -274,7 +302,7 @@ impl<'a> Constructor<'a> {
                 }
                 self.next_token().unwrap();
 
-                let rhs = self.parse_expr_recursive(rbp)?;
+                let rhs = self.construct_expr_recursive(rbp)?;
 
                 let lexeme = span_lexeme!(lhs, rhs);
                 let expr = ExprType::new(op, vec![lhs, rhs]);
@@ -348,6 +376,7 @@ impl TokenType {
         match self {
             TokenType::IntegerLiteral
             | TokenType::FloatLiteral
+            | TokenType::Identifier
             | TokenType::True
             | TokenType::False
             | TokenType::Plus
@@ -438,7 +467,7 @@ impl ExprType {
 //          HELPER METHODS
 //=======================================
 
-impl<'a> Constructor<'a> {
+impl<'a> Parser<'a> {
     #[inline]
     fn peek_token(&mut self) -> CompilerResult<Option<Token>> {
         match self.tokens.peek() {

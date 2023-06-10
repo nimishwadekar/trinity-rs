@@ -41,13 +41,13 @@ pub fn compile_and_run(src: String, output: &mut impl std::io::Write, arg: Outpu
         return Ok(());
     }
 
-    let parsed_program = Parser::parse(lexer.iter())?;
+    let (parsed_program, symbol_table) = Parser::parse(lexer.iter())?;
     if let OutputStage::Parse = arg {
         println!("{}", parsed_program);
         return Ok(());
     }
     
-    let code = CodeGenerator::generate(parsed_program)?;
+    let code = CodeGenerator::generate(parsed_program, symbol_table)?;
     if let OutputStage::Code = arg {
         println!("{}", code);
         return Ok(());

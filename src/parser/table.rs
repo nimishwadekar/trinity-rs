@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, VecDeque, hash_map::Entry};
 use crate::{lexer::Lexeme, CompilerResult};
 use super::DataType;
 
@@ -21,8 +21,13 @@ const MAX_SYMBOLS_IN_SCOPE: usize = u8::MAX as usize + 1;
 // Try vector of queues
 #[derive(Debug)]
 pub struct SymbolTable {
-    table: HashMap<Lexeme, SymbolTableEntry>,
+    tables: Vec<VecDeque<HashMap<Lexeme, SymbolTableEntry>>>,
+    current_depth: usize,
+    current_identifier_count: usize,
     max_identifiers_in_scope: usize,
+
+    /// Lock the table after parsing has completely filled the table and it will only be read afterwards.
+    is_locked: bool,
 }
 
 #[derive(Debug)]
@@ -37,8 +42,15 @@ pub struct SymbolTableEntry {
 
 impl std::fmt::Display for SymbolTable {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        for (identifier, SymbolTableEntry { dtype, index }) in self.table.iter() {
-            writeln!(f, "{identifier} <{dtype}> : {index}")?;
+        for (depth, tables) in self.tables.iter().enumerate() {
+            writeln!(f, "Depth {depth}")?;
+            for table in tables {
+                for (identifier, SymbolTableEntry { dtype, index }) in table {
+                    writeln!(f, "{identifier} <{dtype}> : {index}")?;
+                }
+                writeln!(f)?;
+            }
+            writeln!(f, "---------------------")?;
         }
         Ok(())
     }
@@ -51,27 +63,74 @@ impl std::fmt::Display for SymbolTable {
 impl SymbolTable {
     pub fn new() -> Self {
         Self {
-            table: HashMap::new(),
+            tables: vec![VecDeque::from([HashMap::new()])],
+            current_depth: 0,
+            current_identifier_count: 0,
             max_identifiers_in_scope: 0,
+            is_locked: false,
         }
+    }
+
+    pub fn lock(&mut self) {
+        self.is_locked = true;
     }
 
     pub fn max_identifiers_in_scope(&self) -> usize {
         self.max_identifiers_in_scope
     }
 
-    pub fn insert(&mut self, identifier: Lexeme, dtype: DataType) -> CompilerResult<()> {
-        let index = self.table.len();
-        if index == MAX_SYMBOLS_IN_SCOPE {
-            return Err("Too many variables in the current scope".to_string());
+    pub fn open_scope(&mut self) {
+        self.current_depth += 1;
+
+        if !self.is_locked {
+            if self.current_depth == self.tables.len() {
+                self.tables.push(VecDeque::new());
+            }
+            self.tables[self.current_depth].push_back(HashMap::new());
         }
-        self.table.insert(identifier, SymbolTableEntry::new(dtype, index as u8));
-        self.max_identifiers_in_scope += 1;
+    }
+
+    pub fn close_scope(&mut self) {
+        if !self.is_locked {
+            self.current_identifier_count -= self.tables[self.current_depth].back().unwrap().len();
+        } else {
+            self.tables[self.current_depth].pop_front().unwrap(); // Discard table for now. Cycle if reused.
+        }
+        self.current_depth -= 1;
+    }
+
+    /// Only used when unlocked.
+    pub fn insert(&mut self, identifier: Lexeme, dtype: DataType) -> CompilerResult<()> {
+        assert!(!self.is_locked);
+
+        match self.tables[self.current_depth].back_mut().unwrap().entry(identifier) {
+            Entry::Occupied(mut entry) => entry.get_mut().dtype = dtype,
+            Entry::Vacant(entry) => {
+                if self.current_identifier_count == MAX_SYMBOLS_IN_SCOPE {
+                    return Err("Too many variables".to_string());
+                }
+                entry.insert(SymbolTableEntry::new(dtype, self.current_identifier_count as u8));
+                self.current_identifier_count += 1;
+                if self.max_identifiers_in_scope < self.current_identifier_count {
+                    self.max_identifiers_in_scope = self.current_identifier_count;
+                }
+            },
+        };
+        //println!("{}\n==========================", self);
         Ok(())
     }
 
     pub fn get(&self, identifier: &Lexeme) -> Option<&SymbolTableEntry> {
-        self.table.get(identifier)
+        for depth in (0..=self.current_depth).rev() {
+            let entry = match self.is_locked {
+                false => self.tables[depth].back().unwrap().get(identifier),
+                true => self.tables[depth].front().unwrap().get(identifier),
+            };
+            if let e@Some(..) = entry {
+                return e;
+            }
+        }
+        None
     }
 }
 

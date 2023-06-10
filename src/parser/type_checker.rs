@@ -59,7 +59,7 @@ impl<'a> Parser<'a> {
         Ok(())
     }
 
-    fn typecheck_expr(&self, expr: &Expr) -> CompilerResult<()> {
+    fn typecheck_expr(&mut self, expr: &Expr) -> CompilerResult<()> {
         match expr.expr() {
             ExprType::IntegerLiteral(..) => expr.set_dtype(DataType::Int),
             ExprType::FloatLiteral(..) => expr.set_dtype(DataType::Float),
@@ -70,6 +70,21 @@ impl<'a> Parser<'a> {
                     Some(entry) => expr.set_dtype(entry.dtype),
                     None => return err!("Undefined identifier", expr.lexeme()),
                 }
+            }
+
+            ExprType::Block(stmts, ending_expr) => {
+                self.symbols.open_scope();
+                for stmt in stmts {
+                    self.typecheck_stmt(stmt)?;
+                }
+                match ending_expr {
+                    Some(ending_expr) => {
+                        self.typecheck_expr(ending_expr)?;
+                        expr.set_dtype(ending_expr.dtype())
+                    },
+                    None => expr.set_dtype(DataType::Unit),
+                }
+                self.symbols.close_scope();
             }
             
             ExprType::Add { l, r }

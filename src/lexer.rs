@@ -46,6 +46,7 @@ pub enum TokenType {
 
     LParen, RParen,
     LSquare, RSquare,
+    LBrace, RBrace,
     Colon, Semicolon,
 
     True, False,
@@ -130,6 +131,8 @@ impl std::fmt::Display for TokenType {
             TokenType::RParen => write!(f, ")"),
             TokenType::LSquare => write!(f, "["),
             TokenType::RSquare => write!(f, "]"),
+            TokenType::LBrace => write!(f, "{{"),
+            TokenType::RBrace => write!(f, "}}"),
             TokenType::Colon => write!(f, ":"),
             TokenType::Semicolon => write!(f, ";"),
 
@@ -306,6 +309,8 @@ impl<'a> TokenStream<'a> {
             ')' => TokenType::RParen,
             '[' => TokenType::LSquare,
             ']' => TokenType::RSquare,
+            '{' => TokenType::LBrace,
+            '}' => TokenType::RBrace,
 
             ':' => TokenType::Colon,
             ';' => TokenType::Semicolon,

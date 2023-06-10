@@ -138,14 +138,14 @@ impl<'a> Parser<'a> {
                     // Let statement.
                     TokenType::Let => self.construct_let_stmt()?,
 
-                    // Expression statement.
-                    t if t.is_expr_starter() => self.construct_expr_stmt()?,
-
                     // Empty statement.
                     TokenType::Semicolon => {
                         self.next_token().unwrap();
                         continue;
                     },
+
+                    // Expression statement.
+                    t if t.is_expr_starter() => self.construct_expr_stmt()?,
 
                     _ => return err!("Invalid start of statement", token.lexeme()),
                 }
@@ -153,6 +153,34 @@ impl<'a> Parser<'a> {
             stmts.push(stmt);
         }
         Ok(stmts)
+    }
+
+    fn try_construct_stmt(&mut self) -> Option<CompilerResult<Box<Stmt>>> {
+        match match self.peek_token() {
+            Err(e) => return Some(Err(e)),
+            Ok(tok) => tok,
+        }?.token() {
+            // Temp
+            // Print statement.
+            TokenType::Print => Some(self.construct_print_stmt()),
+
+            // Let statement.
+            TokenType::Let => Some(self.construct_let_stmt()),
+
+            // Empty statement.
+            TokenType::Semicolon => {
+                while let TokenType::Semicolon = match self.peek_token() {
+                    Err(e) => return Some(Err(e)),
+                    Ok(tok) => tok,
+                }?.token() {
+                    self.next_token().unwrap();
+                }
+                self.try_construct_stmt()
+            },
+
+            // Not a statement starter (except expression statements).
+            _ => None,
+        }
     }
 
     /// LetStmt := `let` Identifier `:` Identifier `=` Expr `;`
@@ -201,6 +229,50 @@ impl<'a> Parser<'a> {
         }
     }
 
+    /// BlockExpr := `{` Stmt* Expr? `}`
+    fn construct_block_expr(&mut self) -> CompilerResult<Box<Expr>> {
+        let lbrace = self.consume_token(TokenType::LBrace)?;
+
+        let mut stmts = Vec::new();
+
+        // construct statements and optional ending expression.
+        let ending_expr = loop {
+            // Loop until statements (except expression statements) can be constructed.
+            if let Some(stmt) = self.try_construct_stmt() {
+                stmts.push(stmt?);
+                continue;
+            }
+
+            // A statement could not be constructed, so we check whether the block has ended.
+            if let Some(tok) = self.peek_token()? {
+                if let TokenType::RBrace = tok.token() {
+                    break None; // No ending expression.
+                }
+            }
+
+            // The block did not end, so we check for an expression (only possible syntactical construct here).
+            let expr = self.construct_expr()?;
+
+            // The above expression was either part of an expression statement, or the ending expression,
+            // so we check for that. These are the only two alternatives.
+            if let Some(tok) = self.peek_token()? {
+                if let TokenType::RBrace = tok.token() {
+                    break Some(expr); // Ending expression.
+                }
+            }
+
+            // The block did not end, so it must have been an expression statement.
+            // We consume the semicolon and continue parsing more statements.
+            let semicolon = self.consume_token(TokenType::Semicolon)?;
+            let lexeme = span_lexeme!(expr, semicolon);
+            stmts.push(stmt!(StmtType::Expr(expr), lexeme));
+        };
+
+        let rbrace = self.consume_token(TokenType::RBrace)?;
+
+        Ok(untyped_expr!(ExprType::Block(stmts, ending_expr), span_lexeme!(lbrace, rbrace)))
+    }
+
     /// 
     /// Expr := Expr (`+`) Expr \
     /// Expr := (`+`) Expr \
@@ -217,6 +289,13 @@ impl<'a> Parser<'a> {
 
 impl<'a> Parser<'a> {
     fn construct_expr_recursive(&mut self, min_bp: u8) -> CompilerResult<Box<Expr>> {
+        // Block Expressions handled specially.
+        if let Some(tok) = self.peek_token()? {
+            if let TokenType::LBrace = tok.token() {
+                return self.construct_block_expr();
+            }
+        }
+
         // Assumes first token of expression has been validated.
         let tok = self.expect_token()?;
         let mut lhs = match tok.token() {
@@ -382,6 +461,7 @@ impl TokenType {
             | TokenType::Plus
             | TokenType::Minus
             | TokenType::LParen
+            | TokenType::LBrace
             => true,
             _ => false,
         }

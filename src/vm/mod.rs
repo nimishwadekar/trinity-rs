@@ -32,6 +32,7 @@ macro_rules! bool {
 
 #[derive(Debug, Clone, Copy)]
 pub enum Value {
+    Unit,
     Int(i64),
     Float(f64),
     Bool(bool),
@@ -91,6 +92,10 @@ impl TrinityVM {
                 Instruction::LoadConstantBool(value) => {
                     stack.push(bool!(value))?;
                 },
+
+                Instruction::LoadUnit => {
+                    stack.push(Value::Unit)?;
+                }
 
                 Instruction::AddInt => {
                     let r = stack.pop().as_int();
@@ -203,11 +208,11 @@ impl TrinityVM {
                     stack.push(bool!(l || r))?;
                 },
 
-                Instruction::GetInt { index } => {
+                Instruction::LoadVariable { index } => {
                     stack.push(variables[index as usize])?;
                 },
 
-                Instruction::SetInt { index } => {
+                Instruction::StoreVariable { index } => {
                     variables[index as usize] = stack.pop();
                 },
 
@@ -242,7 +247,6 @@ impl TrinityVM {
                     }
                     break;
                 },
-                _ => ()
             }
 
             if trace {

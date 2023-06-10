@@ -36,6 +36,7 @@ impl<'a> Parser<'a> {
         let mut parser = Self::new(tokens);
         let mut tree = parser.construct()?;
         parser.type_check(&mut tree)?;
+        parser.symbols.lock();
         println!("{}", parser.symbols);
         Ok((tree, parser.symbols))
     }

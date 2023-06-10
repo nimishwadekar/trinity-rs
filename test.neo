@@ -1,4 +1,11 @@
-let x: int = 5;
-let y: int = 1;
-let z: int = x + y;
-print z + 5 == 11;
+let a: int = 1;
+{
+    let b: int = 2;
+    let a: float = 1.2;
+    {
+        let a: int = 5;
+    };
+};
+{
+    let a: bool = true;
+};

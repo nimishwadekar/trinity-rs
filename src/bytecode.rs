@@ -35,6 +35,8 @@ pub enum Instruction {
     /// Push [bool] value.
     LoadConstantBool(bool),
 
+    LoadUnit,
+
     AddInt,
     AddFloat,
     SubInt,
@@ -57,12 +59,8 @@ pub enum Instruction {
     AndBool,
     OrBool,
 
-    SetInt { index: u8 },
-    SetFloat { index: u8 },
-    SetBool { index: u8 },
-    GetInt { index: u8 },
-    GetFloat { index: u8 },
-    GetBool { index: u8 },
+    LoadVariable { index: u8 },
+    StoreVariable { index: u8 },
 
     PrintInt,
     PrintFloat,
@@ -106,12 +104,8 @@ impl std::fmt::Display for Instruction {
             Instruction::LoadConstantInt { index } => write!(f, "LoadConstantInt {index}"),
             Instruction::LoadConstantFloat { index } => write!(f, "LoadConstantFloat {index}"),
             Instruction::LoadConstantBool(value) => write!(f, "LoadConstantBool {value}"),
-            Instruction::GetInt { index } => write!(f, "GetInt {index}"),
-            Instruction::GetFloat { index } => write!(f, "GetFloat {index}"),
-            Instruction::GetBool { index } => write!(f, "GetBool {index}"),
-            Instruction::SetInt { index } => write!(f, "SetInt {index}"),
-            Instruction::SetFloat { index } => write!(f, "SetFloat {index}"),
-            Instruction::SetBool { index } => write!(f, "SetBool {index}"),
+            Instruction::LoadVariable { index } => write!(f, "LoadVariable {index}"),
+            Instruction::StoreVariable { index } => write!(f, "StoreVariable {index}"),
             i => write!(f, "{:?}", i),
         }
     }

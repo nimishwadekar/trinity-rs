@@ -61,16 +61,11 @@ impl CodeGenerator {
                 self.code.write_instruction(Instruction::Pop);
             },
 
-            StmtType::Let { identifier, dtype, initialiser } => {
+            StmtType::Let { identifier, initialiser, .. } => {
                 self.generate_expr(initialiser)?;
-                let entry = self.table.get(identifier).unwrap();
+                let entry = self.table.get(identifier).expect("Table does not have entry for identifier");
                 let index = entry.index;
-                self.code.write_instruction(match dtype {
-                    DataType::Int => Instruction::SetInt { index },
-                    DataType::Float => Instruction::SetFloat { index },
-                    DataType::Bool => Instruction::SetBool { index },
-                    _ => unreachable!("let codegen"),
-                });
+                self.code.write_instruction(Instruction::StoreVariable { index });
             },
 
             StmtType::Print(expr) => {
@@ -110,13 +105,20 @@ impl CodeGenerator {
             ExprType::Identifier => {
                 let entry = self.table.get(expr.lexeme()).unwrap();
                 let index = entry.index;
-                self.code.write_instruction(match entry.dtype {
-                    DataType::Int => Instruction::GetInt { index },
-                    DataType::Float => Instruction::GetFloat { index },
-                    DataType::Bool => Instruction::GetBool { index },
-                    _ => unreachable!("identifier codegen"),
-                });
+                self.code.write_instruction(Instruction::LoadVariable { index });
             },
+
+            ExprType::Block(stmts, expr) => {
+                self.table.open_scope();
+                for stmt in stmts {
+                    self.generate_stmt(stmt)?;
+                }
+                match expr {
+                    Some(expr) => self.generate_expr(expr)?,
+                    None => self.code.write_instruction(Instruction::LoadUnit),
+                }
+                self.table.close_scope();
+            }
 
             ExprType::Positive(expr) => {
                 self.generate_expr(expr)?;

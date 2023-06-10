@@ -33,6 +33,7 @@ pub enum ExprType {
     FloatLiteral(f64),
     BoolLiteral(bool),
     Identifier,
+    Block(Vec<Box<Stmt>>, Option<Box<Expr>>),
 
     // Unary Operations.
     Positive(Box<Expr>),
@@ -231,6 +232,16 @@ impl Expr {
             ExprType::FloatLiteral(value) => writeln!(f, "Float {}", value)?,
             ExprType::BoolLiteral(value) => writeln!(f, "Bool {}", value)?,
             ExprType::Identifier => writeln!(f, "Identifier {}", self.lexeme())?,
+
+            ExprType::Block(stmts, expr) => {
+                writeln!(f, "Block")?;
+                for stmt in stmts {
+                    stmt.display_format(f, indent)?;
+                }
+                if let Some(expr) = expr {
+                    expr.display_format(f, indent)?;
+                }
+            }
 
             ExprType::Positive(expr)
             | ExprType::Negative(expr)

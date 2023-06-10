@@ -1,33 +1,7 @@
-use codegen::CodeGenerator;
-use lexer::Lexer;
-use parser::Parser;
-use vm::TrinityVM;
-
-mod lexer;
-mod parser;
-mod bytecode;
-mod codegen;
-mod vm;
-
-pub type CompilerResult<T> = Result<T, String>;
-
-//======================================================================================
-//          CONSTANTS
-//======================================================================================
-
-pub const EOF: char = '\0';
-
-//======================================================================================
-//          STRUCTURES
-//======================================================================================
-
-enum OutputStage {
-    Lex,
-    Parse,
-    Code,
-    ExecuteTrace,
-    Execute,
-}
+use trinity_rs::{
+    CompilerResult,
+    OutputStage, EOF, compile_and_run,
+};
 
 //======================================================================================
 //          FUNCTIONS
@@ -79,30 +53,7 @@ fn driver() -> CompilerResult<()> {
         Err(e) => return Err(e.to_string()),
     };
 
-    let lexer = Lexer::new(src);
-
-    if let OutputStage::Lex = arg {
-        lexer.print_tokens();
-        return Ok(());
-    }
-
-    let parsed_program = Parser::parse(lexer.iter())?;
-    if let OutputStage::Parse = arg {
-        println!("{}", parsed_program);
-        return Ok(());
-    }
-    
-    let code = CodeGenerator::generate(parsed_program)?;
-    if let OutputStage::Code = arg {
-        println!("{}", code);
-        return Ok(());
-    }
-
-    let trace = if let OutputStage::ExecuteTrace = arg { true } else { false };
-    
-    TrinityVM::execute(code, trace)?;
-
-    Ok(())
+    compile_and_run(src, &mut std::io::stdout(), arg)
 }
 
 fn main() {

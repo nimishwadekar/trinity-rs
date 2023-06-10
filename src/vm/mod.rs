@@ -43,7 +43,7 @@ pub struct TrinityVM;
 //======================================================================================
 
 impl TrinityVM {
-    pub fn execute(code: ByteCode, trace: bool) -> CompilerResult<()> {
+    pub fn execute(code: ByteCode, trace: bool, output: &mut impl std::io::Write) -> CompilerResult<()> {
         let ByteCode { code, constants_int, constants_float } = code;
         let mut pc = 0;
         let mut stack = Stack::new();
@@ -116,6 +116,10 @@ impl TrinityVM {
 
                 Instruction::DivInt => {
                     let r = stack.pop().as_int();
+                    if r == 0 {
+                        return Err("Division by zero".to_string());
+                    }
+
                     let l = stack.pop().as_int();
                     stack.push(int!(l / r))?;
                 },
@@ -189,21 +193,21 @@ impl TrinityVM {
                     if trace {
                         print!(">>> ");
                     }
-                    println!("{}", stack.pop().as_int());
+                    writeln!(output, "{}", stack.pop().as_int()).expect("internal write error");
                 },
 
                 Instruction::PrintFloat => {
                     if trace {
                         print!(">>> ");
                     }
-                    println!("{}", stack.pop().as_float());
+                    writeln!(output, "{}", stack.pop().as_float()).expect("internal write error");
                 },
 
                 Instruction::PrintBool => {
                     if trace {
                         print!(">>> ");
                     }
-                    println!("{}", stack.pop().as_bool());
+                    writeln!(output, "{}", stack.pop().as_bool()).expect("internal write error");
                 },
 
                 Instruction::Pop => {
@@ -212,7 +216,7 @@ impl TrinityVM {
 
                 Instruction::End => {
                     if stack.len() != 0 {
-                        return Err("Program exiting, but stack not empty".to_string());
+                        panic!("Program exiting, but stack not empty");
                     }
                     break;
                 }

@@ -24,18 +24,36 @@ pub enum DataType {
     Unit,
     Int,
     Float,
+    Bool,
 }
 
 #[derive(Debug)]
 pub enum ExprType {
     IntegerLiteral(i64),
     FloatLiteral(f64),
+    BoolLiteral(bool),
 
     // Unary Operations.
     Positive(Box<Expr>),
+    Negative(Box<Expr>),
+    Not(Box<Expr>),
 
     // Binary Operations.
-    Add{ l: Box<Expr>, r: Box<Expr> },
+    Add { l: Box<Expr>, r: Box<Expr> },
+    Subtract { l: Box<Expr>, r: Box<Expr> },
+    Multiply { l: Box<Expr>, r: Box<Expr> },
+    Divide { l: Box<Expr>, r: Box<Expr> },
+    Remainder { l: Box<Expr>, r: Box<Expr> },
+
+    Lesser { l: Box<Expr>, r: Box<Expr> },
+    LesserEqual { l: Box<Expr>, r: Box<Expr> },
+    Greater { l: Box<Expr>, r: Box<Expr> },
+    GreaterEqual { l: Box<Expr>, r: Box<Expr> },
+    Equal { l: Box<Expr>, r: Box<Expr> },
+    NotEqual { l: Box<Expr>, r: Box<Expr> },
+
+    And { l: Box<Expr>, r: Box<Expr> },
+    Or { l: Box<Expr>, r: Box<Expr> },
 
     // Ternary Operations.
 }
@@ -144,6 +162,33 @@ impl Expr {
     }
 }
 
+impl DataType {
+    #[inline(always)]
+    pub fn is_int(&self) -> bool {
+        *self == DataType::Int
+    }
+
+    #[inline(always)]
+    pub fn is_float(&self) -> bool {
+        *self == DataType::Float
+    }
+
+    #[inline(always)]
+    pub fn is_bool(&self) -> bool {
+        *self == DataType::Bool
+    }
+
+    #[inline(always)]
+    pub fn is_numeric_primitive(&self) -> bool {
+        self.is_int() || self.is_float()
+    }
+
+    #[inline(always)]
+    pub fn is_primitive(&self) -> bool {
+        self.is_numeric_primitive() || self.is_bool()
+    }
+}
+
 //=======================================
 //          FORMAT METHODS
 //=======================================
@@ -175,12 +220,53 @@ impl Expr {
         match self.expr() {
             ExprType::IntegerLiteral(value) => writeln!(f, "Integer {}", value)?,
             ExprType::FloatLiteral(value) => writeln!(f, "Float {}", value)?,
-            ExprType::Positive(expr) => {
-                writeln!(f, "Positive")?;
+            ExprType::BoolLiteral(value) => writeln!(f, "Bool {}", value)?,
+
+            ExprType::Positive(expr)
+            | ExprType::Negative(expr)
+            | ExprType::Not(expr) => {
+                writeln!(f, "{}", match self.expr() {
+                    ExprType::Positive(..) => "Positive",
+                    ExprType::Negative(..) => "Negative",
+                    ExprType::Not(..) => "Not",
+                    _ => unreachable!(),
+                })?;
                 expr.display_format(f, indent)?;
             },
-            ExprType::Add { l, r } => {
-                writeln!(f, "Add")?;
+
+            ExprType::Add { l, r }
+            | ExprType::Subtract { l, r }
+            | ExprType::Multiply { l, r }
+            | ExprType::Divide { l, r }
+            | ExprType::Remainder { l, r }
+            
+            | ExprType::Lesser { l, r }
+            | ExprType::LesserEqual { l, r }
+            | ExprType::Greater { l, r }
+            | ExprType::GreaterEqual { l, r }
+            | ExprType::Equal { l, r }
+            | ExprType::NotEqual { l, r }
+            
+            | ExprType::And { l, r }
+            | ExprType::Or { l, r } => {
+                writeln!(f, "{}", match self.expr() {
+                    ExprType::Add {..} => "Add",
+                    ExprType::Subtract {..} => "Subtract",
+                    ExprType::Multiply {..} => "Multiply",
+                    ExprType::Divide {..} => "Divide",
+                    ExprType::Remainder {..} => "Remainder",
+                    
+                    ExprType::Lesser {..} => "Lesser",
+                    ExprType::LesserEqual {..} => "LesserEqual",
+                    ExprType::Greater {..} => "Greater",
+                    ExprType::GreaterEqual {..} => "GreaterEqual",
+                    ExprType::Equal {..} => "Equal",
+                    ExprType::NotEqual {..} => "NotEqual",
+                    
+                    ExprType::And {..} => "And",
+                    ExprType::Or {..} => "Or",
+                    _ => unreachable!(),
+                })?;
                 l.display_format(f, indent)?;
                 r.display_format(f, indent)?;
             },

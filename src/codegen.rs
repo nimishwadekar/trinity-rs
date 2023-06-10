@@ -60,6 +60,7 @@ impl CodeGenerator {
                 self.code.write_instruction(match expr.dtype() {
                     DataType::Int => Instruction::PrintInt,
                     DataType::Float => Instruction::PrintFloat,
+                    DataType::Bool => Instruction::PrintBool,
                     t => unreachable!("Invalid print {t}"),
                 });
             }
@@ -70,17 +71,42 @@ impl CodeGenerator {
     fn generate_expr(&mut self, expr: &Expr) -> CompilerResult<()> {
         match expr.expr() {
             ExprType::IntegerLiteral(value) => {
-                let index = self.code.insert_constant_int(*value)?;
-                self.code.write_instruction(Instruction::LoadConstantInt { index });
+                let instruction = match *value {
+                    0 => Instruction::LoadConstantZeroInt,
+                    _ => Instruction::LoadConstantInt { index: self.code.insert_constant_int(*value)? },
+                };
+                self.code.write_instruction(instruction);
             },
 
             ExprType::FloatLiteral(value) => {
-                let index = self.code.insert_constant_float(*value)?;
-                self.code.write_instruction(Instruction::LoadConstantFloat { index });
+                let instruction = if *value == 0.0 {
+                    Instruction::LoadConstantZeroFloat
+                } else {
+                    Instruction::LoadConstantFloat { index: self.code.insert_constant_float(*value)? }
+                };
+                self.code.write_instruction(instruction);
             },
+
+            ExprType::BoolLiteral(value) => self.code.write_instruction(Instruction::LoadConstantBool(*value)),
 
             ExprType::Positive(expr) => {
                 self.generate_expr(expr)?;
+            },
+
+            ExprType::Negative(expr) => {
+                match expr.dtype() {
+                    DataType::Int => {
+                        self.code.write_instruction(Instruction::LoadConstantZeroInt);
+                        self.generate_expr(expr)?;
+                        self.code.write_instruction(Instruction::SubInt);
+                    },
+                    DataType::Float => {
+                        self.code.write_instruction(Instruction::LoadConstantZeroFloat);
+                        self.generate_expr(expr)?;
+                        self.code.write_instruction(Instruction::SubFloat);
+                    },
+                    t => unreachable!("Invalid Negative {t}"),
+                };
             },
 
             ExprType::Add { l, r } => {
@@ -89,9 +115,113 @@ impl CodeGenerator {
                 self.code.write_instruction(match expr.dtype() {
                     DataType::Int => Instruction::AddInt,
                     DataType::Float => Instruction::AddFloat,
-                    t => unreachable!("Invalid add {t}"),
+                    t => unreachable!("Invalid Add {t}"),
                 });
-            }
+            },
+
+            ExprType::Subtract { l, r } => {
+                self.generate_expr(l)?;
+                self.generate_expr(r)?;
+                self.code.write_instruction(match expr.dtype() {
+                    DataType::Int => Instruction::SubInt,
+                    DataType::Float => Instruction::SubFloat,
+                    t => unreachable!("Invalid Sub {t}"),
+                });
+            },
+
+            ExprType::Multiply { l, r } => {
+                self.generate_expr(l)?;
+                self.generate_expr(r)?;
+                self.code.write_instruction(match expr.dtype() {
+                    DataType::Int => Instruction::MulInt,
+                    DataType::Float => Instruction::MulFloat,
+                    t => unreachable!("Invalid Mul {t}"),
+                });
+            },
+
+            ExprType::Divide { l, r } => {
+                self.generate_expr(l)?;
+                self.generate_expr(r)?;
+                self.code.write_instruction(match expr.dtype() {
+                    DataType::Int => Instruction::DivInt,
+                    DataType::Float => Instruction::DivFloat,
+                    t => unreachable!("Invalid Div {t}"),
+                });
+            },
+
+            ExprType::Remainder { l, r } => {
+                self.generate_expr(l)?;
+                self.generate_expr(r)?;
+                self.code.write_instruction(match expr.dtype() {
+                    DataType::Int => Instruction::ModInt,
+                    t => unreachable!("Invalid Mod {t}"),
+                });
+            },
+
+            ExprType::Lesser { l, r }
+            | ExprType::LesserEqual { l, r }
+            | ExprType::Greater { l, r }
+            | ExprType::GreaterEqual { l, r }
+            | ExprType::Equal { l, r }
+            | ExprType::NotEqual { l, r } => {
+                self.generate_expr(l)?;
+                self.generate_expr(r)?;
+                match l.dtype() {
+                    DataType::Int => self.code.write_instruction(Instruction::SubInt),
+                    DataType::Float => self.code.write_instruction(Instruction::SubFloat),
+                    DataType::Bool => (),
+                    t => unreachable!("Invalid Sub {t}"),
+                };
+
+                self.code.write_instruction(match expr.expr() {
+                    ExprType::Lesser {..}
+                    | ExprType::GreaterEqual {..} => match l.dtype() {
+                        DataType::Int => Instruction::IsPositiveOrZeroInt,
+                        DataType::Float => Instruction::IsPositiveOrZeroFloat,
+                        t => unreachable!("Invalid IsPositiveOrZero {t}"),
+                    },
+
+                    ExprType::LesserEqual {..}
+                    | ExprType::Greater {..} => match l.dtype() {
+                        DataType::Int => Instruction::IsPositiveInt,
+                        DataType::Float => Instruction::IsPositiveFloat,
+                        t => unreachable!("Invalid IsPositive {t}"),
+                    },
+
+                    ExprType::Equal {..}
+                    | ExprType::NotEqual {..} => match l.dtype() {
+                        DataType::Int => Instruction::IsZeroInt,
+                        DataType::Float => Instruction::IsZeroFloat,
+                        DataType::Bool => Instruction::IsEqualBool,
+                        t => unreachable!("Invalid IsZero {t}"),
+                    },
+                    _ => unreachable!(),
+                });
+
+                match expr.expr() {
+                    ExprType::Lesser {..}
+                    | ExprType::LesserEqual {..}
+                    | ExprType::NotEqual {..} => self.code.write_instruction(Instruction::NotBool),
+                    _ => (),
+                };
+            },
+
+            ExprType::Not(expr) => {
+                self.generate_expr(expr)?;
+                self.code.write_instruction(Instruction::NotBool);
+            },
+
+            ExprType::And { l, r } => {
+                self.generate_expr(l)?;
+                self.generate_expr(r)?;
+                self.code.write_instruction(Instruction::AndBool);
+            },
+            
+            ExprType::Or { l, r } => {
+                self.generate_expr(l)?;
+                self.generate_expr(r)?;
+                self.code.write_instruction(Instruction::OrBool);
+            },
         };
         Ok(())
     }

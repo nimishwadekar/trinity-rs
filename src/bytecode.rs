@@ -21,13 +21,36 @@ use crate::CompilerResult;
 #[derive(Debug)]
 pub enum Instruction {
     LoadConstantInt { index: u8 },
+    LoadConstantZeroInt,
     LoadConstantFloat { index: u8 },
+    LoadConstantZeroFloat,
+    LoadConstantBool(bool),
 
     AddInt,
     AddFloat,
+    SubInt,
+    SubFloat,
+    MulInt,
+    MulFloat,
+    DivInt,
+    DivFloat,
+    ModInt,
+
+    IsZeroInt,
+    IsZeroFloat,
+    IsPositiveInt,
+    IsPositiveFloat,
+    IsPositiveOrZeroInt,
+    IsPositiveOrZeroFloat,
+    IsEqualBool,
+
+    NotBool,
+    AndBool,
+    OrBool,
 
     PrintInt,
     PrintFloat,
+    PrintBool,
 
     Pop,
 
@@ -65,12 +88,8 @@ impl std::fmt::Display for Instruction {
         match self {
             Instruction::LoadConstantInt { index } => write!(f, "LoadConstantInt {}", index),
             Instruction::LoadConstantFloat { index } => write!(f, "LoadConstantFloat {}", index),
-            Instruction::AddInt => write!(f, "AddInt"),
-            Instruction::AddFloat => write!(f, "AddFloat"),
-            Instruction::PrintInt => write!(f, "PrintInt"),
-            Instruction::PrintFloat => write!(f, "PrintFloat"),
-            Instruction::Pop => write!(f, "Pop"),
-            Instruction::End => write!(f, "End"),
+            Instruction::LoadConstantBool(value) => write!(f, "LoadConstantBool {}", value),
+            i => write!(f, "{:?}", i),
         }
     }
 }

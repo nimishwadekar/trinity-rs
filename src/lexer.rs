@@ -9,11 +9,11 @@ use crate::EOF;
 //======================================================================================
 
 static KEYWORDS: [(&str, TokenType); 6] = [
-    ("true", TokenType::True),
+    ("and", TokenType::And),
     ("false", TokenType::False),
     ("not", TokenType::Not),
-    ("and", TokenType::And),
     ("or", TokenType::Or),
+    ("true", TokenType::True),
 
     ("print", TokenType::Print),
 ];

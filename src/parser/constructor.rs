@@ -73,16 +73,41 @@ macro_rules! untyped_expr {
 #[derive(Debug, Clone, Copy)]
 enum OperatorPrecedence {
     None,
+    Or,
+    And,
+    Equal,
+    LesserGreater,
     Add,
+    Multiply,
     Unary,
     Call,
 }
 
 #[derive(Debug, Clone, Copy)]
 enum ExprOperator {
+    // Binary
     Add,
-    UnaryPlus,
+    Subtract,
+    Multiply,
+    Divide,
+    Remainder,
+
+    Equal,
+    NotEqual,
+    Lesser,
+    LesserEqual,
+    Greater,
+    GreaterEqual,
+
+    And,
+    Or,
+
     Subscript,
+
+    // Unary
+    UnaryPlus,
+    UnaryMinus,
+    Not,
 }
 
 pub struct Constructor<'a> {
@@ -173,6 +198,9 @@ impl<'a> Constructor<'a> {
 
             TokenType::FloatLiteral => untyped_expr!(ExprType::from_float_literal(tok.lexeme())?, tok.lexeme().clone()),
 
+            TokenType::True => untyped_expr!(ExprType::BoolLiteral(true), tok.lexeme().clone()),
+            TokenType::False => untyped_expr!(ExprType::BoolLiteral(false), tok.lexeme().clone()),
+
             TokenType::LParen => {
                 let lhs = self.parse_expr_recursive(OperatorPrecedence::None as u8)?;
                 let token_rparen = self.consume_token(TokenType::RParen)?;
@@ -199,6 +227,21 @@ impl<'a> Constructor<'a> {
                 None => break,
                 Some(t) => (match t.token() {
                     TokenType::Plus => ExprOperator::Add,
+                    TokenType::Minus => ExprOperator::Subtract,
+                    TokenType::Star => ExprOperator::Multiply,
+                    TokenType::Slash => ExprOperator::Divide,
+                    TokenType::Modulo => ExprOperator::Remainder,
+
+                    TokenType::Lesser => ExprOperator::Lesser,
+                    TokenType::LesserEqual => ExprOperator::LesserEqual,
+                    TokenType::Greater => ExprOperator::Greater,
+                    TokenType::GreaterEqual => ExprOperator::GreaterEqual,
+                    TokenType::EqualEqual => ExprOperator::Equal,
+                    TokenType::NotEqual => ExprOperator::NotEqual,
+
+                    TokenType::And => ExprOperator::And,
+                    TokenType::Or => ExprOperator::Or,
+
                     TokenType::LSquare => ExprOperator::Subscript,
                     _ => break,
                 }, t),
@@ -249,14 +292,33 @@ impl<'a> Constructor<'a> {
 impl ExprOperator {
     fn prefix_binding_power(&self) -> ((), u8) {
         match self {
-            ExprOperator::UnaryPlus => ((), OperatorPrecedence::Unary.bp().1),
+            ExprOperator::UnaryPlus
+            | ExprOperator::UnaryMinus 
+            | ExprOperator::Not => ((), OperatorPrecedence::Unary.bp().1),
             op => unreachable!("prefix_binding_power(): {:?}", op),
         }
     }
 
     fn infix_binding_power(&self) -> Option<(u8, u8)> {
         match self {
-            ExprOperator::Add => Some(OperatorPrecedence::Add.bp()),
+            ExprOperator::Multiply
+            | ExprOperator::Divide
+            | ExprOperator::Remainder => Some(OperatorPrecedence::Multiply.bp()),
+
+            ExprOperator::Add
+            | ExprOperator::Subtract => Some(OperatorPrecedence::Add.bp()),
+
+            ExprOperator::Lesser
+            | ExprOperator::LesserEqual
+            | ExprOperator::Greater
+            | ExprOperator::GreaterEqual => Some(OperatorPrecedence::LesserGreater.bp()),
+
+            ExprOperator::Equal
+            | ExprOperator::NotEqual => Some(OperatorPrecedence::Equal.bp()),
+
+            ExprOperator::And => Some(OperatorPrecedence::And.bp()),
+            ExprOperator::Or => Some(OperatorPrecedence::Or.bp()),
+
             _ => None,
             //op => unreachable!("infix_binding_power(): {:?}", op),
         }
@@ -286,10 +348,12 @@ impl TokenType {
         match self {
             TokenType::IntegerLiteral
             | TokenType::FloatLiteral
+            | TokenType::True
+            | TokenType::False
             | TokenType::Plus
+            | TokenType::Minus
             | TokenType::LParen
             => true,
-
             _ => false,
         }
     }
@@ -297,6 +361,8 @@ impl TokenType {
     fn as_prefix_operator(&self) -> Option<ExprOperator> {
         match self {
             TokenType::Plus => Some(ExprOperator::UnaryPlus),
+            TokenType::Minus => Some(ExprOperator::UnaryMinus),
+            TokenType::Not => Some(ExprOperator::Not),
             _ => None,
         }
     }
@@ -310,22 +376,45 @@ impl ExprType {
 
         match operator {
             // Unary
-            ExprOperator::UnaryPlus => {
+            ExprOperator::UnaryPlus | ExprOperator::UnaryMinus | ExprOperator::Not => {
                 assert_eq!(operand_count, 1, "{}", msg);
                 let expr = unsafe { operands.next().unwrap_unchecked() };
-                ExprType::Positive(expr)
+                match operator {
+                    ExprOperator::UnaryPlus => ExprType::Positive(expr),
+                    ExprOperator::UnaryMinus => ExprType::Negative(expr),
+                    ExprOperator::Not => ExprType::Not(expr),
+                    _ => unreachable!(),
+                }
             },
 
             // Binary
-            ExprOperator::Add => {
+            ExprOperator::Add | ExprOperator::Subtract | ExprOperator::Multiply | ExprOperator::Divide
+            | ExprOperator::Remainder | ExprOperator::Lesser | ExprOperator::LesserEqual | ExprOperator::Greater
+            | ExprOperator::GreaterEqual | ExprOperator::Equal | ExprOperator::NotEqual
+            | ExprOperator::And | ExprOperator::Or | ExprOperator::Subscript => {
                 assert_eq!(operand_count, 2, "{}", msg);
                 let l = unsafe { operands.next().unwrap_unchecked() };
                 let r = unsafe { operands.next().unwrap_unchecked() };
-                ExprType::Add{ l, r }
-            },
-            ExprOperator::Subscript => {
-                assert_eq!(operand_count, 2, "{}", msg);
-                todo!("subscript expression")
+                match operator { 
+                    ExprOperator::Add => ExprType::Add { l, r },
+                    ExprOperator::Subtract => ExprType::Subtract { l, r },
+                    ExprOperator::Multiply => ExprType::Multiply { l, r },
+                    ExprOperator::Divide => ExprType::Divide { l, r },
+                    ExprOperator::Remainder => ExprType::Remainder { l, r },
+
+                    ExprOperator::Lesser => ExprType::Lesser { l, r },
+                    ExprOperator::LesserEqual => ExprType::LesserEqual { l, r },
+                    ExprOperator::Greater => ExprType::Greater { l, r },
+                    ExprOperator::GreaterEqual => ExprType::GreaterEqual { l, r },
+                    ExprOperator::Equal => ExprType::Equal { l, r },
+                    ExprOperator::NotEqual => ExprType::NotEqual { l, r },
+
+                    ExprOperator::And => ExprType::And { l, r },
+                    ExprOperator::Or => ExprType::Or { l, r },
+
+                    ExprOperator::Subscript => todo!(),
+                    _ => unreachable!(),
+                }
             },
         }
     }

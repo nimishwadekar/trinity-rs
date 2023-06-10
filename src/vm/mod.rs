@@ -22,6 +22,10 @@ macro_rules! float {
     ($e:expr) => { Value::Float($e) };
 }
 
+macro_rules! bool {
+    ($e:expr) => { Value::Bool($e) };
+}
+
 //======================================================================================
 //          STRUCTURES
 //======================================================================================
@@ -58,8 +62,20 @@ impl TrinityVM {
                     stack.push(int!(constants_int[index as usize]))?;
                 },
 
+                Instruction::LoadConstantZeroInt => {
+                    stack.push(int!(0))?;
+                },
+
                 Instruction::LoadConstantFloat { index } => {
                     stack.push(float!(constants_float[index as usize]))?;
+                },
+
+                Instruction::LoadConstantZeroFloat => {
+                    stack.push(float!(0.0))?;
+                },
+
+                Instruction::LoadConstantBool(value) => {
+                    stack.push(bool!(value))?;
                 },
 
                 Instruction::AddInt => {
@@ -74,6 +90,101 @@ impl TrinityVM {
                     stack.push(float!(l + r))?;
                 },
 
+                Instruction::SubInt => {
+                    let r = stack.pop().as_int();
+                    let l = stack.pop().as_int();
+                    stack.push(int!(l - r))?;
+                },
+
+                Instruction::SubFloat => {
+                    let r = stack.pop().as_float();
+                    let l = stack.pop().as_float();
+                    stack.push(float!(l - r))?;
+                },
+
+                Instruction::MulInt => {
+                    let r = stack.pop().as_int();
+                    let l = stack.pop().as_int();
+                    stack.push(int!(l * r))?;
+                },
+
+                Instruction::MulFloat => {
+                    let r = stack.pop().as_float();
+                    let l = stack.pop().as_float();
+                    stack.push(float!(l * r))?;
+                },
+
+                Instruction::DivInt => {
+                    let r = stack.pop().as_int();
+                    let l = stack.pop().as_int();
+                    stack.push(int!(l / r))?;
+                },
+
+                Instruction::DivFloat => {
+                    let r = stack.pop().as_float();
+                    let l = stack.pop().as_float();
+                    stack.push(float!(l / r))?;
+                },
+
+                Instruction::ModInt => {
+                    let r = stack.pop().as_int();
+                    let l = stack.pop().as_int();
+                    stack.push(int!(l % r))?;
+                },
+
+                Instruction::IsZeroInt => {
+                    let value = stack.pop().as_int();
+                    stack.push(bool!(value == 0))?;
+                },
+
+                Instruction::IsZeroFloat => {
+                    let value = stack.pop().as_float();
+                    stack.push(bool!(value == 0.0))?;
+                },
+
+                Instruction::IsPositiveInt => {
+                    let value = stack.pop().as_int();
+                    stack.push(bool!(value > 0))?;
+                },
+
+                Instruction::IsPositiveFloat => {
+                    let value = stack.pop().as_float();
+                    stack.push(bool!(value > 0.0))?;
+                },
+
+                Instruction::IsPositiveOrZeroInt => {
+                    let value = stack.pop().as_int();
+                    stack.push(bool!(value >= 0))?;
+                },
+
+                Instruction::IsPositiveOrZeroFloat => {
+                    let value = stack.pop().as_float();
+                    stack.push(bool!(value >= 0.0))?;
+                },
+
+                Instruction::IsEqualBool => {
+                    let r = stack.pop().as_bool();
+                    let l = stack.pop().as_bool();
+                    stack.push(bool!(l == r))?;
+                },
+
+                Instruction::NotBool => {
+                    let value = stack.pop().as_bool();
+                    stack.push(bool!(!value))?;
+                },
+
+                Instruction::AndBool => {
+                    let r = stack.pop().as_bool();
+                    let l = stack.pop().as_bool();
+                    stack.push(bool!(l && r))?;
+                },
+                
+                Instruction::OrBool => {
+                    let r = stack.pop().as_bool();
+                    let l = stack.pop().as_bool();
+                    stack.push(bool!(l || r))?;
+                },
+
                 Instruction::PrintInt => {
                     if trace {
                         print!(">>> ");
@@ -86,6 +197,13 @@ impl TrinityVM {
                         print!(">>> ");
                     }
                     println!("{}", stack.pop().as_float());
+                },
+
+                Instruction::PrintBool => {
+                    if trace {
+                        print!(">>> ");
+                    }
+                    println!("{}", stack.pop().as_bool());
                 },
 
                 Instruction::Pop => {

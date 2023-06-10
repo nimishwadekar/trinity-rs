@@ -20,6 +20,7 @@ const MAX_STACK_ENTRIES: usize = 1 << 17;
 pub enum Value {
     Int(i64),
     Float(f64),
+    Bool(bool),
 }
 
 pub struct Stack {
@@ -82,6 +83,13 @@ impl Value {
         match self {
             Value::Float(val) => val,
             _ => panic!("Expected `Value::Float`, found {:?}", self),
+        }
+    }
+
+    pub fn as_bool(self) -> bool {
+        match self {
+            Value::Bool(val) => val,
+            _ => panic!("Expected `Value::Bool`, found {:?}", self),
         }
     }
 }

@@ -11,23 +11,7 @@ use super::ast::{ParseTree, Stmt, StmtType, Expr, ExprType, DataType};
 //          MACROS
 //======================================================================================
 
-macro_rules! is_type_eq {
-    ($a:expr, $b:expr) => {
-        $a.dtype() == $b.dtype()
-    };
-}
 
-macro_rules! is_int {
-    ($e:expr) => {
-        $e.dtype() == DataType::Int
-    };
-}
-
-macro_rules! is_float {
-    ($e:expr) => {
-        $e.dtype() == DataType::Float
-    };
-}
 
 //======================================================================================
 //          STRUCTURES
@@ -59,7 +43,7 @@ impl TypeChecker {
             StmtType::Expr(expr) => self.parse_expr(expr)?,
             StmtType::Print(expr) => {
                 self.parse_expr(expr)?;
-                if !is_int!(expr) && !is_float!(expr) {
+                if !expr.dtype().is_primitive() {
                     return err!("Invalid operand type for `print`", expr.lexeme());
                 }
             },
@@ -71,27 +55,87 @@ impl TypeChecker {
         match expr.expr() {
             ExprType::IntegerLiteral(..) => expr.set_dtype(DataType::Int),
             ExprType::FloatLiteral(..) => expr.set_dtype(DataType::Float),
+            ExprType::BoolLiteral(..) => expr.set_dtype(DataType::Bool),
             
-            ExprType::Add { l, r } => {
+            ExprType::Add { l, r }
+            | ExprType::Subtract { l, r }
+            | ExprType::Multiply { l, r }
+            | ExprType::Divide { l, r }
+            | ExprType::Remainder { l, r }
+            
+            | ExprType::Lesser { l, r }
+            | ExprType::LesserEqual { l, r }
+            | ExprType::Greater { l, r }
+            | ExprType::GreaterEqual { l, r }
+            | ExprType::Equal { l, r }
+            | ExprType::NotEqual { l, r }
+            
+            | ExprType::And { l, r }
+            | ExprType::Or { l, r } => {
                 self.parse_expr(l)?;
                 self.parse_expr(r)?;
                 
-                let dtype = if is_int!(l) && is_int!(r) || is_float!(l) && is_float!(r) {
-                    l.dtype()
-                } else {
-                    return err!(format!("Invalid operands of types `{}` and `{}` for `+`", l.dtype(), r.dtype()), r.lexeme());
+                let dtype = if match expr.expr() {
+                    ExprType::Add {..}
+                    | ExprType::Subtract {..}
+                    | ExprType::Multiply {..}
+                    | ExprType::Divide {..}
+                    | ExprType::Lesser {..}
+                    | ExprType::LesserEqual {..}
+                    | ExprType::Greater {..}
+                    | ExprType::GreaterEqual {..} => l.dtype().is_numeric_primitive(),
+                    
+                    ExprType::Equal {..}
+                    | ExprType::NotEqual {..} => l.dtype().is_primitive(),
+
+                    ExprType::Remainder {..} => l.dtype().is_int(),
+                    
+                    ExprType::And {..}
+                    | ExprType::Or {..} => l.dtype().is_bool(),
+
+                    _ => unreachable!(),
+                } && l.dtype() == r.dtype() {
+                    match expr.expr() {
+                        ExprType::Add {..}
+                        | ExprType::Subtract {..}
+                        | ExprType::Multiply {..}
+                        | ExprType::Divide {..}
+                        | ExprType::Remainder {..} => l.dtype(),
+                        
+                        ExprType::Lesser {..}
+                        | ExprType::LesserEqual {..}
+                        | ExprType::Greater {..}
+                        | ExprType::GreaterEqual {..}
+                        | ExprType::Equal {..}
+                        | ExprType::NotEqual {..}
+                        | ExprType::And {..}
+                        | ExprType::Or {..} => DataType::Bool,
+    
+                        _ => unreachable!(),
+                    }
+                } 
+                else {
+                    return err!(format!("Invalid operands of types `{}` and `{}`", l.dtype(), r.dtype()), r.lexeme());
                 };
 
                 expr.set_dtype(dtype);
             },
 
-            ExprType::Positive(operand) => {
+            ExprType::Positive(operand)
+            | ExprType::Negative(operand)
+            | ExprType::Not(operand) => {
                 self.parse_expr(operand)?;
                 
-                let dtype = if is_int!(operand) || is_float!(operand) {
+                let dtype = if match expr.expr() {
+                    ExprType::Positive(..)
+                    | ExprType::Negative(..) => operand.dtype().is_numeric_primitive(),
+                    ExprType::Not(..) => operand.dtype().is_bool(),
+                    _ => unreachable!(),
+                } {
                     operand.dtype()
-                } else {
-                    return err!(format!("Invalid operand of type {} for `+`", operand.dtype()), operand.lexeme());
+                }
+                else {
+                    return err!(format!("Invalid operand of type `{}`", operand.dtype()), operand.lexeme());
                 };
 
                 expr.set_dtype(dtype);
